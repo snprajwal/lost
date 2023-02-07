@@ -1,0 +1,5 @@
+[package]
+name = "lost_syntax"
+version = "0.1.0"
+authors = ["Prajwal S N <prajwalnadig21@gmail.com>"]
+edition = "2021"
