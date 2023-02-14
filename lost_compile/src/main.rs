@@ -1,6 +1,8 @@
 use lost_syntax::{
+    ast::AstNode,
     error::Error,
     lex::Lexer,
+    parse::Parser,
     token::{Token, TokenKind},
 };
 use std::{
@@ -33,12 +35,9 @@ fn run_repl() {
             break;
         }
         match run(&line) {
-            Ok(tokens) => {
+            Ok(node) => {
                 code.push_str(&line);
-                tokens
-                    .iter()
-                    .filter(|t| t.kind != TokenKind::WHITESPACE)
-                    .for_each(|t| println!("{t:?}"));
+                println!("{node:#?}");
             }
             Err(errors) => errors.iter().for_each(|e| eprintln!("{e}")),
         }
@@ -48,33 +47,31 @@ fn run_repl() {
 fn run_file(file_path: &str) {
     let source = fs::read_to_string(file_path).expect("Failed to read file");
     match run(&source) {
-        Ok(tokens) => tokens
-            .iter()
-            .filter(|t| t.kind != TokenKind::WHITESPACE)
-            .for_each(|t| println!("{t:?}")),
+        Ok(node) => println!("{node:#?}"),
         Err(errors) => errors.iter().for_each(|e| eprintln!("{e}")),
     }
 }
 
-fn run(source: &str) -> Result<Vec<Token>, Vec<Error>> {
-    let mut lexer = Lexer::new(source);
+fn run(source: &str) -> Result<AstNode, Vec<Error>> {
+    let lexer = Lexer::new(source);
     let mut tokens: Vec<Token> = Vec::default();
     let mut errors: Vec<Error> = Vec::default();
-    loop {
-        match lexer.lex() {
-            Ok(t) => {
-                if t.kind == TokenKind::EOF {
-                    break;
-                } else {
-                    tokens.push(t);
-                }
-            }
-            Err(e) => errors.push(e),
-        }
+    match lexer.lex_all() {
+        Ok(mut t) => tokens.append(&mut t),
+        Err(mut e) => errors.append(&mut e),
     }
-    if errors.is_empty() {
-        Ok(tokens)
-    } else {
-        Err(errors)
+
+    if !errors.is_empty() {
+        return Err(errors);
     }
+
+    let sanitised_tokens = tokens
+        .into_iter()
+        .filter(|t| !matches!(t.kind, TokenKind::WHITESPACE | TokenKind::COMMENT))
+        .collect::<Vec<Token>>();
+    let parser = Parser::new(&sanitised_tokens);
+    parser.parse().map_err(|e| {
+        errors.push(e);
+        errors
+    })
 }

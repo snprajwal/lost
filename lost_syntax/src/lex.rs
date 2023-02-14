@@ -31,6 +31,7 @@ impl<'a> Lexer<'a> {
             match self.lex() {
                 Ok(t) => {
                     if t.kind == TokenKind::EOF {
+                        tokens.push(t);
                         break;
                     } else {
                         tokens.push(t);
@@ -93,7 +94,7 @@ impl<'a> Lexer<'a> {
                             end: self.current,
                         },
                         self.line,
-                        String::default(),
+                        "end of file".to_string(),
                     ))
                 } else {
                     Err(ErrorMsg::EndOfStream.to_string())
