@@ -1,5 +1,7 @@
+mod interpret;
+
+use interpret::Interpreter;
 use lost_syntax::{
-    ast::AstNode,
     error::Error,
     lex::Lexer,
     parse::Parser,
@@ -35,9 +37,9 @@ fn run_repl() {
             break;
         }
         match run(&line) {
-            Ok(node) => {
+            Ok(val) => {
                 code.push_str(&line);
-                println!("{node:#?}");
+                println!("{val}");
             }
             Err(errors) => errors.iter().for_each(|e| eprintln!("{e}")),
         }
@@ -47,12 +49,12 @@ fn run_repl() {
 fn run_file(file_path: &str) {
     let source = fs::read_to_string(file_path).expect("Failed to read file");
     match run(&source) {
-        Ok(node) => println!("{node:#?}"),
+        Ok(val) => println!("{val}"),
         Err(errors) => errors.iter().for_each(|e| eprintln!("{e}")),
     }
 }
 
-fn run(source: &str) -> Result<AstNode, Vec<Error>> {
+fn run(source: &str) -> Result<String, Vec<Error>> {
     let lexer = Lexer::new(source);
     let mut tokens: Vec<Token> = Vec::default();
     let mut errors: Vec<Error> = Vec::default();
@@ -70,7 +72,16 @@ fn run(source: &str) -> Result<AstNode, Vec<Error>> {
         .filter(|t| !matches!(t.kind, TokenKind::WHITESPACE | TokenKind::COMMENT))
         .collect::<Vec<Token>>();
     let parser = Parser::new(&sanitised_tokens);
-    parser.parse().map_err(|e| {
+    let root = match parser.parse() {
+        Ok(node) => node,
+        Err(e) => {
+            errors.push(e);
+            return Err(errors);
+        }
+    };
+    println!("{root:#?}");
+    let interpreter = Interpreter::new(root);
+    interpreter.interpret().map_err(|e| {
         errors.push(e);
         errors
     })
