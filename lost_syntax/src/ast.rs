@@ -1,11 +1,18 @@
 use std::fmt::Display;
 
-use crate::token::{TextRange, TokenKind};
+use crate::token::TokenKind;
 
 #[derive(Debug)]
-pub struct AstNode {
-    pub range: TextRange,
-    pub expr: Expr,
+pub struct Source {
+    pub items: Vec<Item>,
+}
+
+#[derive(Debug)]
+pub enum Item {
+    LetStmt { name: Literal, init: Option<Expr> },
+    ExprStmt(Expr),
+    PrintStmt(Expr),
+    Block(Vec<Item>),
 }
 
 #[derive(Clone, Debug)]
@@ -92,8 +99,9 @@ impl LogicalOp {
     }
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug)]
 pub enum Literal {
+    Ident(String),
     Number(f64),
     Str(String),
     Boolean(bool),
@@ -103,16 +111,21 @@ pub enum Literal {
 impl Display for Literal {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str(&match self {
-            Self::Null => "".to_string(),
+            Self::Ident(name) => name.to_owned(),
             Self::Number(n) => n.to_string(),
             Self::Str(s) => s.to_owned(),
             Self::Boolean(b) => b.to_string(),
+            Self::Null => "null".to_string(),
         })
     }
 }
 
 #[derive(Clone, Debug)]
 pub enum Expr {
+    Assignment {
+        name: Literal,
+        value: Box<Expr>,
+    },
     Literal(Literal),
     Unary {
         op: UnaryOp,

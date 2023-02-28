@@ -31,7 +31,6 @@ impl<'a> Lexer<'a> {
             match self.lex() {
                 Ok(t) => {
                     if t.kind == TokenKind::EOF {
-                        tokens.push(t);
                         break;
                     } else {
                         tokens.push(t);
@@ -67,7 +66,7 @@ impl<'a> Lexer<'a> {
                         Ok(self.lookahead_for_token('=', TokenKind::LESS_EQUAL, TokenKind::LESS))
                     }
                     '"' => self.lex_string(),
-                    '/' => self.try_lex_comment(),
+                    '/' => Ok(self.lex_slash_or_comment()),
                     _ => {
                         if let Some(t) = TokenKind::from_char(c) {
                             // If it is a newline, increment the current line count
@@ -97,7 +96,7 @@ impl<'a> Lexer<'a> {
                         "end of file".to_string(),
                     ))
                 } else {
-                    Err(ErrorMsg::EndOfStream.to_string())
+                    Err(format!("Lex error: {}", ErrorMsg::EndOfStream))
                 }
             }
         }
@@ -140,12 +139,12 @@ impl<'a> Lexer<'a> {
         Ok(token)
     }
 
-    fn try_lex_comment(&mut self) -> Result<Token, Error> {
+    fn lex_slash_or_comment(&mut self) -> Token {
         if self.advance_if(|c| c == '/').is_some() {
             self.advance_while(|c| c != '\n');
-            Ok(self.make_token(TokenKind::COMMENT))
+            self.make_token(TokenKind::COMMENT)
         } else {
-            Ok(self.make_token(TokenKind::SLASH))
+            self.make_token(TokenKind::SLASH)
         }
     }
 
@@ -207,7 +206,7 @@ impl<'a> Lexer<'a> {
 
     fn error(&self, msg: ErrorMsg) -> Error {
         format!(
-            "Error at line {}: {} {}",
+            "Lex error at line {}: {} {}",
             self.line + 1,
             msg,
             self.lexeme_from_range()

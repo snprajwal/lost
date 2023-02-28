@@ -10,6 +10,10 @@ pub enum ErrorMsg {
     // Parse errors
     UnexpectedToken,
     MissingParen,
+    MissingBrace,
+    MissingSemicolon,
+    InvalidIdent,
+    InvalidAssignment,
     // EOF
     EndOfStream,
 }
@@ -21,6 +25,10 @@ impl Display for ErrorMsg {
             Self::UnterminatedString => "unterminated string",
             Self::UnexpectedToken => "unexpected token",
             Self::MissingParen => "missing closing parenthesis at",
+            Self::MissingBrace => "missing closing brace at",
+            Self::MissingSemicolon => "missing semicolon at",
+            Self::InvalidIdent => "invalid identifier",
+            Self::InvalidAssignment => "invalid assignment target",
             Self::EndOfStream => "end of stream",
         })
     }
