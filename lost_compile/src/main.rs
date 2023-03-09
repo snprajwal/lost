@@ -7,12 +7,7 @@ mod interpret;
 
 use environment::Env;
 use interpret::Interpreter;
-use lost_syntax::{
-    error::Error,
-    lex::Lexer,
-    parse::Parser,
-    token::{Token, TokenKind},
-};
+use lost_syntax::{error::Error, lex::Lexer, parse::Parser};
 use std::{
     env, fs,
     io::{self, Write},
@@ -77,17 +72,10 @@ fn run_file(file_path: &str) {
 
 fn run(source: &str, env: Option<Env>) -> Result<Env, Vec<Error>> {
     let lexer = Lexer::new(source);
-    let mut all_tokens: Vec<Token> = Vec::default();
     trace!("Lexing {source}");
-    all_tokens.append(&mut lexer.lex_all()?);
-
-    trace!("Sanitising {all_tokens:#?}");
-    let sanitised_tokens = all_tokens
-        .into_iter()
-        .filter(|t| !matches!(t.kind, TokenKind::WHITESPACE | TokenKind::COMMENT))
-        .collect::<Vec<Token>>();
-    trace!("Parsing {sanitised_tokens:#?}");
-    let parser = Parser::new(&sanitised_tokens);
+    let tokens = lexer.lex_all_sanitised()?;
+    trace!("Parsing {tokens:#?}");
+    let parser = Parser::new(&tokens);
     let root = parser.parse_all()?;
     trace!("Interpreting {root:#?}");
     let mut interpreter = Interpreter::new(env);

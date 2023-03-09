@@ -24,6 +24,14 @@ impl<'a> Lexer<'a> {
         }
     }
 
+    pub fn lex_all_sanitised(self) -> Result<Vec<Token>, Vec<Error>> {
+        self.lex_all().map(|v| {
+            v.into_iter()
+                .filter(|t| !matches!(t.kind, TokenKind::WHITESPACE | TokenKind::COMMENT))
+                .collect()
+        })
+    }
+
     pub fn lex_all(mut self) -> Result<Vec<Token>, Vec<Error>> {
         let mut tokens: Vec<Token> = Vec::default();
         let mut errors: Vec<Error> = Vec::default();
@@ -52,7 +60,7 @@ impl<'a> Lexer<'a> {
             Some(c) => {
                 match c {
                     '!' => {
-                        Ok(self.lookahead_for_token('=', TokenKind::BANG_EQUAL, TokenKind::EQUAL))
+                        Ok(self.lookahead_for_token('=', TokenKind::BANG_EQUAL, TokenKind::BANG))
                     }
                     '=' => {
                         Ok(self.lookahead_for_token('=', TokenKind::EQUAL_EQUAL, TokenKind::EQUAL))
@@ -135,7 +143,8 @@ impl<'a> Lexer<'a> {
         }
         let token = self.make_token(TokenKind::STRING);
         // Consume the closing apostrophe(")
-        self.advance();
+        self.advance_if(|c| c == '"')
+            .ok_or_else(|| self.error(ErrorMsg::UnterminatedString))?;
         Ok(token)
     }
 
@@ -211,5 +220,177 @@ impl<'a> Lexer<'a> {
             msg,
             self.lexeme_from_range()
         )
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[inline]
+    fn lex_test(input: &str, expected: Vec<(TokenKind, &str)>) {
+        let lexer = Lexer::new(input);
+        expected
+            .into_iter()
+            .zip(lexer.lex_all_sanitised().unwrap())
+            .for_each(|((k, l), t)| {
+                assert_eq!(t.kind, k);
+                assert_eq!(t.lexeme, l);
+            });
+    }
+
+    #[test]
+    fn keywords() {
+        lex_test(
+            r#"
+            and class else false fn for if null or
+            print return super this true let while
+            "#,
+            vec![
+                (TokenKind::AND, "and"),
+                (TokenKind::CLASS, "class"),
+                (TokenKind::ELSE, "else"),
+                (TokenKind::FALSE, "false"),
+                (TokenKind::FN, "fn"),
+                (TokenKind::FOR, "for"),
+                (TokenKind::IF, "if"),
+                (TokenKind::NULL, "null"),
+                (TokenKind::OR, "or"),
+                (TokenKind::PRINT, "print"),
+                (TokenKind::RETURN, "return"),
+                (TokenKind::SUPER, "super"),
+                (TokenKind::THIS, "this"),
+                (TokenKind::TRUE, "true"),
+                (TokenKind::LET, "let"),
+                (TokenKind::WHILE, "while"),
+            ],
+        );
+    }
+
+    #[test]
+    fn literal() {
+        lex_test(
+            "10 3.14 foo bar \"Hello there\"",
+            vec![
+                (TokenKind::NUMBER, "10"),
+                (TokenKind::NUMBER, "3.14"),
+                (TokenKind::IDENT, "foo"),
+                (TokenKind::IDENT, "bar"),
+                (TokenKind::STRING, "Hello there"),
+            ],
+        );
+    }
+
+    #[test]
+    fn cmp() {
+        lex_test(
+            "< > <= >= == !=",
+            vec![
+                (TokenKind::LESS, "<"),
+                (TokenKind::GREATER, ">"),
+                (TokenKind::LESS_EQUAL, "<="),
+                (TokenKind::GREATER_EQUAL, ">="),
+                (TokenKind::EQUAL_EQUAL, "=="),
+                (TokenKind::BANG_EQUAL, "!="),
+            ],
+        );
+    }
+
+    #[test]
+    fn arithmetic() {
+        lex_test(
+            "! + - * / =",
+            vec![
+                (TokenKind::BANG, "!"),
+                (TokenKind::PLUS, "+"),
+                (TokenKind::MINUS, "-"),
+                (TokenKind::STAR, "*"),
+                (TokenKind::SLASH, "/"),
+                (TokenKind::EQUAL, "="),
+            ],
+        );
+    }
+
+    #[test]
+    fn symbols() {
+        lex_test(
+            ". , ; () {}",
+            vec![
+                (TokenKind::DOT, "."),
+                (TokenKind::COMMA, ","),
+                (TokenKind::SEMICOLON, ";"),
+                (TokenKind::LPAREN, "("),
+                (TokenKind::RPAREN, ")"),
+                (TokenKind::LBRACE, "{"),
+                (TokenKind::RBRACE, "}"),
+            ],
+        );
+    }
+
+    #[test]
+    fn whitespace() {
+        lex_test(
+            " \t\r\n",
+            vec![
+                (TokenKind::WHITESPACE, " "),
+                (TokenKind::WHITESPACE, "\t"),
+                (TokenKind::WHITESPACE, "\r"),
+                (TokenKind::WHITESPACE, "\n"),
+            ],
+        );
+    }
+
+    #[test]
+    fn comment() {
+        let input = "// Hello there";
+        let token = Lexer::new(input).lex().unwrap();
+        assert_eq!(token.kind, TokenKind::COMMENT);
+        assert_eq!(token.lexeme, input);
+    }
+
+    #[test]
+    fn eof() {
+        let input = "";
+        let token = Lexer::new(input).lex().unwrap();
+        assert_eq!(token.kind, TokenKind::EOF);
+        assert_eq!(token.lexeme, "end of file");
+    }
+
+    #[test]
+    fn unexpected_char() {
+        let input = "he@#llo";
+        let mut lexer = Lexer::new(input);
+        // Lex `he` as an ident
+        lexer.lex().unwrap();
+        assert_eq!(
+            lexer.lex().unwrap_err(),
+            format!("Lex error at line 1: {} @", ErrorMsg::UnexpectedChar)
+        );
+    }
+
+    #[test]
+    fn unterminated_string() {
+        let input = "\"Hello there";
+        let err = Lexer::new(input).lex().unwrap_err();
+        assert_eq!(
+            err,
+            format!(
+                "Lex error at line 1: {} {}",
+                ErrorMsg::UnterminatedString,
+                &input[1..]
+            )
+        );
+    }
+
+    #[test]
+    fn end_of_stream() {
+        let input = "";
+        let mut lexer = Lexer::new(input);
+        // Lex the EOF
+        lexer.lex().unwrap();
+        assert_eq!(
+            lexer.lex().unwrap_err(),
+            format!("Lex error: {}", ErrorMsg::EndOfStream.to_string())
+        );
     }
 }

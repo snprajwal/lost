@@ -2,12 +2,12 @@ use std::fmt::Display;
 
 use crate::token::TokenKind;
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub struct Source {
     pub items: Vec<Item>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum Item {
     LetStmt { name: Literal, init: Option<Expr> },
     ExprStmt(Expr),
@@ -15,7 +15,7 @@ pub enum Item {
     Block(Vec<Item>),
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum UnaryOp {
     Bang,
     Minus,
@@ -99,7 +99,7 @@ impl LogicalOp {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum Literal {
     Ident(String),
     Number(f64),
@@ -120,7 +120,7 @@ impl Display for Literal {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum Expr {
     Assignment {
         name: Literal,

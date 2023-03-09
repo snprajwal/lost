@@ -19,20 +19,21 @@ impl AddAssign for TextRange {
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 #[repr(u8)]
 pub enum TokenKind {
-    // Single character tokens
+    // Symbols
     LPAREN,
     RPAREN,
     LBRACE,
     RBRACE,
     COMMA,
     DOT,
+    SEMICOLON,
+    // Arithmetic
+    BANG,
     MINUS,
     PLUS,
-    SEMICOLON,
     SLASH,
     STAR,
-    // One or two character tokens
-    BANG,
+    // Comparisons
     BANG_EQUAL,
     EQUAL,
     EQUAL_EQUAL,

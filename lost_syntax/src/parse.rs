@@ -98,10 +98,10 @@ impl<'a> Parser<'a> {
                     self.advance();
                     Ok(Item::Block(items))
                 } else {
-                    Err(Self::error(t, ErrorMsg::MissingBrace))
+                    Err(Self::error(t, ErrorMsg::MissingClosingBrace))
                 }
             }
-            None => Err(Self::eof_error(ErrorMsg::MissingBrace)),
+            None => Err(Self::eof_error(ErrorMsg::MissingClosingBrace)),
         }
     }
 
@@ -261,10 +261,10 @@ impl<'a> Parser<'a> {
                 self.advance();
                 return Ok(Expr::Group(Box::new(expr)));
             } else {
-                Err(Self::error(t, ErrorMsg::MissingParen))
+                Err(Self::error(t, ErrorMsg::MissingClosingParen))
             }
         } else {
-            Err(Self::eof_error(ErrorMsg::MissingParen))
+            Err(Self::eof_error(ErrorMsg::MissingClosingParen))
         }
     }
 
@@ -330,6 +330,115 @@ impl<'a> Parser<'a> {
     }
 
     fn eof_error(msg: ErrorMsg) -> Error {
-        format!("Parse error: {} at {}", msg, ErrorMsg::EndOfStream)
+        format!("Parse error: {} {}", msg, ErrorMsg::EndOfStream)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::lex::Lexer;
+
+    fn parse_test(input: &str, expected: Source) {
+        let tokens = Lexer::new(input).lex_all_sanitised().unwrap();
+        let source = Parser::new(&tokens).parse_all().unwrap();
+        assert_eq!(source, expected);
+    }
+
+    fn parse_err_test(input: &str, expected: &str) {
+        let tokens = Lexer::new(input).lex_all_sanitised().unwrap();
+        let err = Parser::new(&tokens)
+            .parse_all()
+            .map_err(|v| v.first().unwrap().to_owned())
+            .unwrap_err();
+        assert_eq!(err, expected);
+    }
+
+    #[test]
+    fn let_stmt() {
+        parse_test(
+            "let x = 42;",
+            Source {
+                items: vec![Item::LetStmt {
+                    name: Literal::Ident("x".to_owned()),
+                    init: Some(Expr::Literal(Literal::Number(42.0))),
+                }],
+            },
+        );
+    }
+
+    #[test]
+    fn print_stmt() {
+        parse_test(
+            "print 1 + 2 * 3;",
+            Source {
+                items: vec![Item::PrintStmt(Expr::Binary {
+                    lhs: Box::new(Expr::Literal(Literal::Number(1.0))),
+                    op: ast::BinOp::Plus,
+                    rhs: Box::new(Expr::Binary {
+                        lhs: Box::new(Expr::Literal(Literal::Number(2.0))),
+                        op: ast::BinOp::Star,
+                        rhs: Box::new(Expr::Literal(Literal::Number(3.0))),
+                    }),
+                })],
+            },
+        );
+    }
+
+    #[test]
+    fn expr_stmt() {
+        parse_test(
+            "2.0;",
+            Source {
+                items: vec![Item::ExprStmt(Expr::Literal(Literal::Number(2.0)))],
+            },
+        );
+    }
+
+    #[test]
+    fn block() {
+        parse_test(
+            "{ let x = 1; let y = 2; }",
+            Source {
+                items: vec![Item::Block(vec![
+                    Item::LetStmt {
+                        name: Literal::Ident("x".to_owned()),
+                        init: Some(Expr::Literal(Literal::Number(1.0))),
+                    },
+                    Item::LetStmt {
+                        name: Literal::Ident("y".to_owned()),
+                        init: Some(Expr::Literal(Literal::Number(2.0))),
+                    },
+                ])],
+            },
+        );
+    }
+
+    #[test]
+    fn missing_semicolon() {
+        parse_err_test(
+            "let x = 1",
+            format!("Parse error: {} end of stream", ErrorMsg::MissingSemicolon).as_str(),
+        );
+    }
+
+    #[test]
+    fn missing_closing_paren() {
+        parse_err_test(
+            "(1 + 2 * 3;",
+            format!("Parse error at line 1: {} ;", ErrorMsg::MissingClosingParen).as_str(),
+        );
+    }
+
+    #[test]
+    fn missing_closing_brace() {
+        parse_err_test(
+            "{ print a;",
+            format!(
+                "Parse error: {} end of stream",
+                ErrorMsg::MissingClosingBrace
+            )
+            .as_str(),
+        );
     }
 }
