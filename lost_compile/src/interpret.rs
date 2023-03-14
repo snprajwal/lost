@@ -148,6 +148,108 @@ impl Interpreter {
     }
 
     fn is_eq(&self, left: &Type, right: &Type) -> bool {
-        self.to_bool(&left) == self.to_bool(&right)
+        match (left, right) {
+            (Type::Number(m), Type::Number(n)) => m == n,
+            (Type::Str(m), Type::Str(n)) => m == n,
+            _ => self.to_bool(&left) == self.to_bool(&right),
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn let_stmt() {
+        let mut interpreter = Interpreter::new(None);
+        let var = "x".to_string();
+        let name = Literal::Ident(var.clone());
+        let init = Some(Expr::Literal(Literal::Number(5.0)));
+        assert!(interpreter.interpret_let_stmt(name, init).is_ok());
+        assert_eq!(interpreter.env.get(var).unwrap(), Type::Number(5.0));
+    }
+
+    #[test]
+    fn block() {
+        let mut interpreter = Interpreter::new(None);
+        let items = vec![
+            Item::LetStmt {
+                name: Literal::Ident("x".to_string()),
+                init: Some(Expr::Literal(Literal::Number(5.0))),
+            },
+            Item::Block(vec![Item::ExprStmt(Expr::Literal(Literal::Ident(
+                "x".to_string(),
+            )))]),
+        ];
+        assert!(interpreter.interpret_block(items).is_ok());
+    }
+
+    #[test]
+    fn expr() {
+        let mut interpreter = Interpreter::new(None);
+
+        // Number literal
+        let result = interpreter.interpret_expr(Expr::Literal(Literal::Number(10.5)));
+        assert_eq!(result.unwrap(), Type::Number(10.5));
+
+        // Boolean literal
+        let result = interpreter.interpret_expr(Expr::Literal(Literal::Boolean(true)));
+        assert_eq!(result.unwrap(), Type::Boolean(true));
+
+        // String literal
+        let result = interpreter.interpret_expr(Expr::Literal(Literal::Str("hello".to_string())));
+        assert_eq!(result.unwrap(), Type::Str("hello".to_string()));
+
+        // Identifier
+        interpreter.env.set("x".to_string(), Type::Number(5.0));
+        let result = interpreter.interpret_expr(Expr::Literal(Literal::Ident("x".to_string())));
+        assert_eq!(result.unwrap(), Type::Number(5.0));
+
+        // Unary minus
+        let result = interpreter.interpret_expr(Expr::Unary {
+            op: UnaryOp::Minus,
+            expr: Box::new(Expr::Literal(Literal::Number(10.0))),
+        });
+        assert_eq!(result.unwrap(), Type::Number(-10.0));
+
+        // Unary bang
+        let result = interpreter.interpret_expr(Expr::Unary {
+            op: UnaryOp::Bang,
+            expr: Box::new(Expr::Literal(Literal::Boolean(false))),
+        });
+        assert_eq!(result.unwrap(), Type::Boolean(true));
+
+        // Addition
+        let result = interpreter.interpret_expr(Expr::Binary {
+            lhs: Box::new(Expr::Literal(Literal::Number(10.0))),
+            op: BinOp::Plus,
+            rhs: Box::new(Expr::Literal(Literal::Number(20.0))),
+        });
+        assert_eq!(result.unwrap(), Type::Number(30.0));
+
+        // String concatenation
+        let result = interpreter.interpret_expr(Expr::Binary {
+            lhs: Box::new(Expr::Literal(Literal::Str("hello".to_string()))),
+            op: BinOp::Plus,
+            rhs: Box::new(Expr::Literal(Literal::Str("world".to_string()))),
+        });
+        assert_eq!(result.unwrap(), Type::Str("helloworld".to_string()));
+
+        // Equality
+        let result = interpreter.interpret_expr(Expr::Binary {
+            lhs: Box::new(Expr::Literal(Literal::Number(10.0))),
+            op: BinOp::EqualEqual,
+            rhs: Box::new(Expr::Literal(Literal::Number(10.0))),
+        });
+        assert_eq!(result.unwrap(), Type::Boolean(true));
+
+        // Inequality
+        let result = interpreter.interpret_expr(Expr::Binary {
+            lhs: Box::new(Expr::Literal(Literal::Number(10.0))),
+            op: BinOp::BangEqual,
+            rhs: Box::new(Expr::Literal(Literal::Number(20.0))),
+        });
+        assert_eq!(result.unwrap(), Type::Boolean(true));
     }
 }
