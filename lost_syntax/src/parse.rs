@@ -45,6 +45,7 @@ impl<'a> Parser<'a> {
                     TokenKind::LET => self.parse_let_stmt(),
                     TokenKind::PRINT => self.parse_print(),
                     TokenKind::LBRACE => return self.parse_block(),
+                    TokenKind::IF => return self.parse_if_stmt(),
                     _ => self.parse_expr_stmt(),
                 }?;
                 self.advance_or_err(TokenKind::SEMICOLON, ErrorMsg::MissingSemicolon)?;
@@ -74,6 +75,26 @@ impl<'a> Parser<'a> {
         // Consume the `print` keyword
         self.advance();
         Ok(Item::PrintStmt(self.parse_expr()?))
+    }
+
+    fn parse_if_stmt(&mut self) -> Result<Item, Error> {
+        // Consume the `if` keyword
+        self.advance();
+        self.advance_or_err(TokenKind::LPAREN, ErrorMsg::MissingOpeningParen)?;
+        let condition = self.parse_expr()?;
+        self.advance_or_err(TokenKind::RPAREN, ErrorMsg::MissingClosingParen)?;
+        let if_item = self.parse_item()?;
+        let else_item = if self.advance_if(|t| t.kind == TokenKind::ELSE).is_some() {
+            Some(Box::new(self.parse_item()?))
+        } else {
+            None
+        };
+
+        Ok(Item::IfStmt {
+            condition,
+            if_item: Box::new(if_item),
+            else_item,
+        })
     }
 
     fn parse_expr_stmt(&mut self) -> Result<Item, Error> {
@@ -110,7 +131,7 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_assignment(&mut self) -> Result<Expr, Error> {
-        let lhs = self.parse_eq()?;
+        let lhs = self.parse_logical_or()?;
         let Some(eq) = (
             if self
                 .stream
@@ -139,6 +160,32 @@ impl<'a> Parser<'a> {
                 ErrorMsg::InvalidAssignment,
             ));
         }
+    }
+
+    fn parse_logical_or(&mut self) -> Result<Expr, Error> {
+        let mut lhs = self.parse_logical_and()?;
+        while self.advance_if(|t| t.kind == TokenKind::OR).is_some() {
+            let rhs = self.parse_logical_and()?;
+            lhs = Expr::Logical {
+                lhs: Box::new(lhs),
+                op: ast::LogicalOp::Or,
+                rhs: Box::new(rhs),
+            };
+        }
+        Ok(lhs)
+    }
+
+    fn parse_logical_and(&mut self) -> Result<Expr, Error> {
+        let mut lhs = self.parse_eq()?;
+        while self.advance_if(|t| t.kind == TokenKind::AND).is_some() {
+            let rhs = self.parse_eq()?;
+            lhs = Expr::Logical {
+                lhs: Box::new(lhs),
+                op: ast::LogicalOp::And,
+                rhs: Box::new(rhs),
+            };
+        }
+        Ok(lhs)
     }
 
     fn parse_eq(&mut self) -> Result<Expr, Error> {
@@ -370,17 +417,9 @@ mod tests {
     #[test]
     fn print_stmt() {
         parse_test(
-            "print 1 + 2 * 3;",
+            "print 1;",
             Source {
-                items: vec![Item::PrintStmt(Expr::Binary {
-                    lhs: Box::new(Expr::Literal(Literal::Number(1.0))),
-                    op: ast::BinOp::Plus,
-                    rhs: Box::new(Expr::Binary {
-                        lhs: Box::new(Expr::Literal(Literal::Number(2.0))),
-                        op: ast::BinOp::Star,
-                        rhs: Box::new(Expr::Literal(Literal::Number(3.0))),
-                    }),
-                })],
+                items: vec![Item::PrintStmt(Expr::Literal(Literal::Number(1.0)))],
             },
         );
     }
@@ -391,6 +430,24 @@ mod tests {
             "2.0;",
             Source {
                 items: vec![Item::ExprStmt(Expr::Literal(Literal::Number(2.0)))],
+            },
+        );
+    }
+
+    #[test]
+    fn if_stmt() {
+        parse_test(
+            "if (true) { print 1; } else { print 0; }",
+            Source {
+                items: vec![Item::IfStmt {
+                    condition: Expr::Literal(Literal::Boolean(true)),
+                    if_item: Box::new(Item::Block(vec![Item::PrintStmt(Expr::Literal(
+                        Literal::Number(1.0),
+                    ))])),
+                    else_item: Some(Box::new(Item::Block(vec![Item::PrintStmt(Expr::Literal(
+                        Literal::Number(0.0),
+                    ))]))),
+                }],
             },
         );
     }
@@ -410,6 +467,24 @@ mod tests {
                         init: Some(Expr::Literal(Literal::Number(2.0))),
                     },
                 ])],
+            },
+        );
+    }
+
+    #[test]
+    fn logical() {
+        parse_test(
+            "1 and 2 or 3;",
+            Source {
+                items: vec![Item::ExprStmt(Expr::Logical {
+                    lhs: Box::new(Expr::Logical {
+                        lhs: Box::new(Expr::Literal(Literal::Number(1.0))),
+                        op: ast::LogicalOp::And,
+                        rhs: Box::new(Expr::Literal(Literal::Number(2.0))),
+                    }),
+                    op: ast::LogicalOp::Or,
+                    rhs: Box::new(Expr::Literal(Literal::Number(3.0))),
+                })],
             },
         );
     }

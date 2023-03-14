@@ -2,7 +2,7 @@ use crate::{
     environment::{Env, Type},
     error::{make, Error, ErrorMsg},
 };
-use lost_syntax::ast::{BinOp, Expr, Item, Literal, UnaryOp};
+use lost_syntax::ast::{BinOp, Expr, Item, Literal, LogicalOp, UnaryOp};
 
 #[derive(Default, Debug)]
 pub struct Interpreter {
@@ -41,7 +41,11 @@ impl Interpreter {
                 self.interpret_expr(expr)?;
             }
             Item::LetStmt { name, init } => return self.interpret_let_stmt(name, init),
-
+            Item::IfStmt {
+                condition,
+                if_item,
+                else_item,
+            } => return self.interpret_if_stmt(condition, *if_item, else_item.map(|item| *item)),
             Item::Block(items) => return self.interpret_block(items),
         };
         Ok(())
@@ -54,6 +58,23 @@ impl Interpreter {
             None => Type::Null,
         };
         self.env.set(ident, value);
+        Ok(())
+    }
+
+    fn interpret_if_stmt(
+        &mut self,
+        condition: Expr,
+        if_item: Item,
+        else_item: Option<Item>,
+    ) -> Result<(), Error> {
+        if self.interpret_expr(condition).map(|t| self.to_bool(&t))? {
+            self.interpret_item(if_item)?;
+        } else {
+            if let Some(item) = else_item {
+                self.interpret_item(item)?;
+            }
+        }
+
         Ok(())
     }
 
@@ -74,6 +95,7 @@ impl Interpreter {
             Expr::Unary { op, expr } => self.interpret_unary(op, *expr),
             Expr::Binary { lhs, op, rhs } => self.interpret_binary(*lhs, op, *rhs),
             Expr::Group(e) => self.interpret_expr(*e),
+            Expr::Logical { lhs, op, rhs } => self.interpret_logical(*lhs, op, *rhs),
         }
     }
 
@@ -102,6 +124,14 @@ impl Interpreter {
             Type::Boolean(b) => *b,
             _ => true,
         }
+    }
+
+    fn interpret_logical(&mut self, lhs: Expr, op: LogicalOp, rhs: Expr) -> Result<Type, Error> {
+        let left = self.interpret_expr(lhs)?;
+        return match (op, self.to_bool(&left)) {
+            (LogicalOp::Or, true) | (LogicalOp::And, false) => Ok(left),
+            _ => self.interpret_expr(rhs),
+        };
     }
 
     fn interpret_binary(&mut self, lhs: Expr, op: BinOp, rhs: Expr) -> Result<Type, Error> {
@@ -168,6 +198,19 @@ mod tests {
         let init = Some(Expr::Literal(Literal::Number(5.0)));
         assert!(interpreter.interpret_let_stmt(name, init).is_ok());
         assert_eq!(interpreter.env.get(var).unwrap(), Type::Number(5.0));
+    }
+
+    #[test]
+    fn if_stmt() {
+        let mut interpreter = Interpreter::new(None);
+        let condition = Expr::Literal(Literal::Boolean(true));
+        let if_item = Item::ExprStmt(Expr::Literal(Literal::Str("hello".to_string())));
+        let else_item = Some(Item::ExprStmt(Expr::Literal(Literal::Str(
+            "world".to_string(),
+        ))));
+        assert!(interpreter
+            .interpret_if_stmt(condition, if_item, else_item)
+            .is_ok());
     }
 
     #[test]
@@ -243,6 +286,22 @@ mod tests {
             rhs: Box::new(Expr::Literal(Literal::Number(10.0))),
         });
         assert_eq!(result.unwrap(), Type::Boolean(true));
+
+        // Logical and
+        let result = interpreter.interpret_expr(Expr::Logical {
+            lhs: Box::new(Expr::Literal(Literal::Number(10.0))),
+            op: LogicalOp::And,
+            rhs: Box::new(Expr::Literal(Literal::Number(20.0))),
+        });
+        assert_eq!(result.unwrap(), Type::Number(20.0));
+
+        // Logical or
+        let result = interpreter.interpret_expr(Expr::Logical {
+            lhs: Box::new(Expr::Literal(Literal::Number(10.0))),
+            op: LogicalOp::Or,
+            rhs: Box::new(Expr::Literal(Literal::Number(20.0))),
+        });
+        assert_eq!(result.unwrap(), Type::Number(10.0));
 
         // Inequality
         let result = interpreter.interpret_expr(Expr::Binary {

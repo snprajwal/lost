@@ -73,8 +73,8 @@ impl<'a> Lexer<'a> {
                     '<' => {
                         Ok(self.lookahead_for_token('=', TokenKind::LESS_EQUAL, TokenKind::LESS))
                     }
-                    '"' => self.lex_string(),
                     '/' => Ok(self.lex_slash_or_comment()),
+                    '"' => self.lex_string(),
                     _ => {
                         if let Some(t) = TokenKind::from_char(c) {
                             // If it is a newline, increment the current line count

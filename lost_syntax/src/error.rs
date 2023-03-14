@@ -9,6 +9,7 @@ pub enum ErrorMsg {
     UnterminatedString,
     // Parse errors
     UnexpectedToken,
+    MissingOpeningParen,
     MissingClosingParen,
     MissingClosingBrace,
     MissingSemicolon,
@@ -24,6 +25,7 @@ impl Display for ErrorMsg {
             Self::UnexpectedChar => "unexpected character",
             Self::UnterminatedString => "unterminated string",
             Self::UnexpectedToken => "unexpected token",
+            Self::MissingOpeningParen => "missing opening parenthesis at",
             Self::MissingClosingParen => "missing closing parenthesis at",
             Self::MissingClosingBrace => "missing closing brace at",
             Self::MissingSemicolon => "missing semicolon at",

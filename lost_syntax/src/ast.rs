@@ -9,9 +9,17 @@ pub struct Source {
 
 #[derive(Debug, PartialEq)]
 pub enum Item {
-    LetStmt { name: Literal, init: Option<Expr> },
+    LetStmt {
+        name: Literal,
+        init: Option<Expr>,
+    },
     ExprStmt(Expr),
     PrintStmt(Expr),
+    IfStmt {
+        condition: Expr,
+        if_item: Box<Item>,
+        else_item: Option<Box<Item>>,
+    },
     Block(Vec<Item>),
 }
 
@@ -82,7 +90,7 @@ impl BinOp {
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum LogicalOp {
     And,
     Or,
@@ -134,6 +142,11 @@ pub enum Expr {
     Binary {
         lhs: Box<Expr>,
         op: BinOp,
+        rhs: Box<Expr>,
+    },
+    Logical {
+        lhs: Box<Expr>,
+        op: LogicalOp,
         rhs: Box<Expr>,
     },
     Group(Box<Expr>),
