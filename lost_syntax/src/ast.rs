@@ -7,7 +7,7 @@ pub struct Source {
     pub items: Vec<Item>,
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum Item {
     LetStmt {
         name: Literal,
@@ -19,6 +19,10 @@ pub enum Item {
         condition: Expr,
         if_item: Box<Item>,
         else_item: Option<Box<Item>>,
+    },
+    WhileStmt {
+        condition: Expr,
+        body: Box<Item>,
     },
     Block(Vec<Item>),
 }

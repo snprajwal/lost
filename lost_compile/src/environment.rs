@@ -7,7 +7,7 @@ use crate::error::{make, Error, ErrorMsg};
 #[derive(Default, Debug, Clone)]
 pub struct Env {
     values: HashMap<String, Type>,
-    parent: Option<Box<Env>>,
+    pub parent: Option<Box<Env>>,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -38,7 +38,7 @@ impl Env {
     }
 
     pub fn set(&mut self, name: String, value: Type) -> Type {
-        debug!("Set {name} -> {value:#?}");
+        debug!("Set {name} -> {value:?}");
         self.values.insert(name, value.clone());
         value
     }
@@ -55,7 +55,7 @@ impl Env {
     }
 
     pub fn assign(&mut self, name: String, value: Type) -> Result<Type, Error> {
-        debug!("Assign {name} -> {value:#?})");
+        debug!("Assign {name} -> {value:?})");
         if self.values.contains_key(&name) {
             return Ok(self.set(name, value));
         }

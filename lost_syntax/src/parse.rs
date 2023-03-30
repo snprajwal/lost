@@ -46,6 +46,7 @@ impl<'a> Parser<'a> {
                     TokenKind::PRINT => self.parse_print(),
                     TokenKind::LBRACE => return self.parse_block(),
                     TokenKind::IF => return self.parse_if_stmt(),
+                    TokenKind::WHILE => return self.parse_while_stmt(),
                     _ => self.parse_expr_stmt(),
                 }?;
                 self.advance_or_err(TokenKind::SEMICOLON, ErrorMsg::MissingSemicolon)?;
@@ -94,6 +95,19 @@ impl<'a> Parser<'a> {
             condition,
             if_item: Box::new(if_item),
             else_item,
+        })
+    }
+
+    fn parse_while_stmt(&mut self) -> Result<Item, Error> {
+        // Consume the `while` keyword
+        self.advance();
+        self.advance_or_err(TokenKind::LPAREN, ErrorMsg::MissingOpeningParen)?;
+        let condition = self.parse_expr()?;
+        self.advance_or_err(TokenKind::RPAREN, ErrorMsg::MissingClosingParen)?;
+
+        Ok(Item::WhileStmt {
+            condition,
+            body: Box::new(self.parse_item()?),
         })
     }
 
@@ -447,6 +461,21 @@ mod tests {
                     else_item: Some(Box::new(Item::Block(vec![Item::PrintStmt(Expr::Literal(
                         Literal::Number(0.0),
                     ))]))),
+                }],
+            },
+        );
+    }
+
+    #[test]
+    fn while_stmt() {
+        parse_test(
+            "while (true) { print 1; }",
+            Source {
+                items: vec![Item::WhileStmt {
+                    condition: Expr::Literal(Literal::Boolean(true)),
+                    body: Box::new(Item::Block(vec![Item::PrintStmt(Expr::Literal(
+                        Literal::Number(1.0),
+                    ))])),
                 }],
             },
         );

@@ -46,6 +46,9 @@ impl Interpreter {
                 if_item,
                 else_item,
             } => return self.interpret_if_stmt(condition, *if_item, else_item.map(|item| *item)),
+            Item::WhileStmt { condition, body } => {
+                return self.interpret_while_stmt(condition, *body)
+            }
             Item::Block(items) => return self.interpret_block(items),
         };
         Ok(())
@@ -78,13 +81,27 @@ impl Interpreter {
         Ok(())
     }
 
+    fn interpret_while_stmt(&mut self, condition: Expr, body: Item) -> Result<(), Error> {
+        while self
+            .interpret_expr(condition.clone())
+            .map(|t| self.to_bool(&t))?
+        {
+            self.interpret_item(body.clone())?;
+        }
+
+        Ok(())
+    }
+
     fn interpret_block(&mut self, items: Vec<Item>) -> Result<(), Error> {
-        let old_env = self.env.clone();
         // Create a new env with the current env as the parent
-        let new_env = Env::with_parent(self.env.clone());
-        self.env = new_env;
+        // and set it as the active env for the block scope
+        self.env = Env::with_parent(self.env.clone());
         let res = self.interpret_all(items);
-        self.env = old_env;
+        self.env = *self
+            .env
+            .clone()
+            .parent
+            .expect("Parent env must be present for block envs");
         res
     }
 
@@ -211,6 +228,14 @@ mod tests {
         assert!(interpreter
             .interpret_if_stmt(condition, if_item, else_item)
             .is_ok());
+    }
+
+    #[test]
+    fn while_stmt() {
+        let mut interpreter = Interpreter::new(None);
+        let condition = Expr::Literal(Literal::Boolean(false));
+        let body = Item::ExprStmt(Expr::Literal(Literal::Str("hello".to_string())));
+        assert!(interpreter.interpret_while_stmt(condition, body).is_ok());
     }
 
     #[test]
