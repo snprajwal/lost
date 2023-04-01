@@ -47,6 +47,7 @@ impl<'a> Parser<'a> {
                     TokenKind::LBRACE => return self.parse_block(),
                     TokenKind::IF => return self.parse_if_stmt(),
                     TokenKind::WHILE => return self.parse_while_stmt(),
+                    TokenKind::FOR => return self.parse_for_stmt(),
                     _ => self.parse_expr_stmt(),
                 }?;
                 self.advance_or_err(TokenKind::SEMICOLON, ErrorMsg::MissingSemicolon)?;
@@ -109,6 +110,65 @@ impl<'a> Parser<'a> {
             condition,
             body: Box::new(self.parse_item()?),
         })
+    }
+
+    fn parse_for_stmt(&mut self) -> Result<Item, Error> {
+        // Consume the `for` keyword
+        self.advance();
+        self.advance_or_err(TokenKind::LPAREN, ErrorMsg::MissingOpeningParen)?;
+        let init = match self.stream.peek() {
+            Some(&t) => match t.kind {
+                TokenKind::SEMICOLON => None,
+                TokenKind::LET => Some(self.parse_let_stmt()?),
+                _ => Some(self.parse_expr_stmt()?),
+            },
+            None => return Err(format!("Parse error: {}", ErrorMsg::EndOfStream)),
+        };
+        self.advance_or_err(TokenKind::SEMICOLON, ErrorMsg::MissingSemicolon)?;
+
+        let condition = if self
+            .stream
+            .peek()
+            .filter(|t| t.kind == TokenKind::SEMICOLON)
+            .is_some()
+        {
+            Expr::Literal(Literal::Boolean(true))
+        } else {
+            self.parse_expr()?
+        };
+        self.advance_or_err(TokenKind::SEMICOLON, ErrorMsg::MissingSemicolon)?;
+
+        let modifier = if self
+            .stream
+            .peek()
+            .filter(|t| t.kind == TokenKind::RPAREN)
+            .is_some()
+        {
+            None
+        } else {
+            Some(self.parse_expr()?)
+        };
+        self.advance_or_err(TokenKind::RPAREN, ErrorMsg::MissingClosingParen)?;
+
+        let mut body = self.parse_item()?;
+        // If the modifier is present, create
+        // a block and place it at the end
+        if let Some(m) = modifier {
+            body = Item::Block(vec![body, Item::ExprStmt(m)]);
+        }
+        // Create a while loop with the condition and body
+        body = Item::WhileStmt {
+            condition,
+            body: Box::new(body),
+        };
+        // If the initialiser is present, create
+        // a block and place it at the beginning,
+        // followed by the actual while loop block
+        if let Some(i) = init {
+            body = Item::Block(vec![i, body]);
+        }
+
+        Ok(body)
     }
 
     fn parse_expr_stmt(&mut self) -> Result<Item, Error> {
@@ -477,6 +537,42 @@ mod tests {
                         Literal::Number(1.0),
                     ))])),
                 }],
+            },
+        );
+    }
+
+    #[test]
+    fn for_stmt() {
+        let var = "a".to_string();
+        parse_test(
+            "for (let a = 0; a < 5; a = a + 1) { print a; }",
+            Source {
+                items: vec![Item::Block(vec![
+                    Item::LetStmt {
+                        name: Literal::Ident(var.clone()),
+                        init: Some(Expr::Literal(Literal::Number(0.0))),
+                    },
+                    Item::WhileStmt {
+                        condition: Expr::Binary {
+                            lhs: Box::new(Expr::Literal(Literal::Ident(var.clone()))),
+                            op: ast::BinOp::Less,
+                            rhs: Box::new(Expr::Literal(Literal::Number(5.0))),
+                        },
+                        body: Box::new(Item::Block(vec![
+                            Item::Block(vec![Item::PrintStmt(Expr::Literal(Literal::Ident(
+                                var.clone(),
+                            )))]),
+                            Item::ExprStmt(Expr::Assignment {
+                                name: Literal::Ident(var.clone()),
+                                value: Box::new(Expr::Binary {
+                                    lhs: Box::new(Expr::Literal(Literal::Ident(var.clone()))),
+                                    op: ast::BinOp::Plus,
+                                    rhs: Box::new(Expr::Literal(Literal::Number(1.0))),
+                                }),
+                            }),
+                        ])),
+                    },
+                ])],
             },
         );
     }
