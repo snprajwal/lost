@@ -1,6 +1,9 @@
+use std::cmp::Ordering;
+
 use crate::{
-    environment::{Env, Type},
-    error::{make, Error, ErrorMsg},
+    environment::Env,
+    error::{make, ErrorMsg, Exception},
+    types::{Callable, Func, Type},
 };
 use lost_syntax::ast::{BinOp, Expr, Item, Literal, LogicalOp, UnaryOp};
 
@@ -16,7 +19,7 @@ impl Interpreter {
         }
     }
 
-    pub fn interpret_all(&mut self, items: Vec<Item>) -> Result<(), Error> {
+    pub fn interpret_all(&mut self, items: Vec<Item>) -> Result<(), Exception> {
         let mut item_iter = items.into_iter();
         while let Some(item) = item_iter.next() {
             self.interpret(item)?;
@@ -24,17 +27,17 @@ impl Interpreter {
         Ok(())
     }
 
-    pub fn interpret(&mut self, item: Item) -> Result<(), Error> {
+    pub fn interpret(&mut self, item: Item) -> Result<(), Exception> {
         self.interpret_item(item)
     }
 
-    fn interpret_item(&mut self, item: Item) -> Result<(), Error> {
+    fn interpret_item(&mut self, item: Item) -> Result<(), Exception> {
         self.interpret_stmt(item)
     }
 
     // This is a hack to allow PrintStmt for debugging,
     // and will be removed once functions are introduced
-    fn interpret_stmt(&mut self, stmt: Item) -> Result<(), Error> {
+    fn interpret_stmt(&mut self, stmt: Item) -> Result<(), Exception> {
         match stmt {
             Item::PrintStmt(expr) => println!("{}", self.interpret_expr(expr)?),
             Item::ExprStmt(expr) => {
@@ -49,12 +52,16 @@ impl Interpreter {
             Item::WhileStmt { condition, body } => {
                 return self.interpret_while_stmt(condition, *body)
             }
-            Item::Block(items) => return self.interpret_block(items),
+            Item::ReturnStmt(expr) => return self.interpret_return_stmt(expr),
+            Item::Block(items) => return self.interpret_block(items).map(|_| ()),
+            Item::Function { name, args, body } => {
+                return self.interpret_function(name, args, body)
+            }
         };
         Ok(())
     }
 
-    fn interpret_let_stmt(&mut self, name: Literal, init: Option<Expr>) -> Result<(), Error> {
+    fn interpret_let_stmt(&mut self, name: Literal, init: Option<Expr>) -> Result<(), Exception> {
         let Literal::Ident(ident) = name else { unreachable!("Non-identifiers cannot be passed to this function") };
         let value = match init {
             Some(expr) => self.interpret_expr(expr)?,
@@ -69,7 +76,7 @@ impl Interpreter {
         condition: Expr,
         if_item: Item,
         else_item: Option<Item>,
-    ) -> Result<(), Error> {
+    ) -> Result<(), Exception> {
         if self.interpret_expr(condition).map(|t| self.to_bool(&t))? {
             self.interpret_item(if_item)?;
         } else {
@@ -81,7 +88,7 @@ impl Interpreter {
         Ok(())
     }
 
-    fn interpret_while_stmt(&mut self, condition: Expr, body: Item) -> Result<(), Error> {
+    fn interpret_while_stmt(&mut self, condition: Expr, body: Item) -> Result<(), Exception> {
         while self
             .interpret_expr(condition.clone())
             .map(|t| self.to_bool(&t))?
@@ -92,36 +99,72 @@ impl Interpreter {
         Ok(())
     }
 
-    fn interpret_block(&mut self, items: Vec<Item>) -> Result<(), Error> {
+    fn interpret_block(&mut self, items: Vec<Item>) -> Result<Type, Exception> {
         // Create a new env with the current env as the parent
         // and set it as the active env for the block scope
         self.env = Env::with_parent(self.env.clone());
-        let res = self.interpret_all(items);
+        self.interpret_all(items)?;
+        // Restore the env
         self.env = *self
             .env
             .clone()
             .parent
             .expect("Parent env must be present for block envs");
-        res
+
+        Ok(Type::Null)
     }
 
-    fn interpret_expr(&mut self, expr: Expr) -> Result<Type, Error> {
+    fn interpret_function(
+        &mut self,
+        name: Literal,
+        args: Vec<Literal>,
+        body: Vec<Item>,
+    ) -> Result<(), Exception> {
+        let Literal::Ident(ident) = name else { unreachable!("Non-identifiers cannot be passed to this function") };
+        let arg_idents = args
+            .into_iter()
+            .map(|arg| {
+                if let Literal::Ident(arg_ident) = arg {
+                    arg_ident
+                } else {
+                    unreachable!("Non-identifiers cannot be passed to this function");
+                }
+            })
+            .collect();
+        self.env.set(
+            ident.clone(),
+            Type::Func(Func {
+                name: ident,
+                args: arg_idents,
+                body,
+                env: self.env.clone(),
+            }),
+        );
+        Ok(())
+    }
+
+    fn interpret_return_stmt(&mut self, expr: Expr) -> Result<(), Exception> {
+        Err(Exception::Return(self.interpret_expr(expr)?))
+    }
+
+    fn interpret_expr(&mut self, expr: Expr) -> Result<Type, Exception> {
         match expr {
             Expr::Assignment { name, value } => self.interpret_assignment(name, *value),
             Expr::Literal(l) => Ok(self.env.from_literal(l)?),
             Expr::Unary { op, expr } => self.interpret_unary(op, *expr),
             Expr::Binary { lhs, op, rhs } => self.interpret_binary(*lhs, op, *rhs),
-            Expr::Group(e) => self.interpret_expr(*e),
             Expr::Logical { lhs, op, rhs } => self.interpret_logical(*lhs, op, *rhs),
+            Expr::Group(e) => self.interpret_expr(*e),
+            Expr::Call { func, args } => self.interpret_func_call(*func, args),
         }
     }
 
-    fn interpret_assignment(&mut self, name: Literal, expr: Expr) -> Result<Type, Error> {
+    fn interpret_assignment(&mut self, name: Literal, expr: Expr) -> Result<Type, Exception> {
         let value = self.interpret_expr(expr)?;
         self.env.assign(name.to_string(), value)
     }
 
-    fn interpret_unary(&mut self, op: UnaryOp, expr: Expr) -> Result<Type, Error> {
+    fn interpret_unary(&mut self, op: UnaryOp, expr: Expr) -> Result<Type, Exception> {
         let lit = self.interpret_expr(expr)?;
         match op {
             UnaryOp::Minus => {
@@ -143,7 +186,12 @@ impl Interpreter {
         }
     }
 
-    fn interpret_logical(&mut self, lhs: Expr, op: LogicalOp, rhs: Expr) -> Result<Type, Error> {
+    fn interpret_logical(
+        &mut self,
+        lhs: Expr,
+        op: LogicalOp,
+        rhs: Expr,
+    ) -> Result<Type, Exception> {
         let left = self.interpret_expr(lhs)?;
         return match (op, self.to_bool(&left)) {
             (LogicalOp::Or, true) | (LogicalOp::And, false) => Ok(left),
@@ -151,7 +199,7 @@ impl Interpreter {
         };
     }
 
-    fn interpret_binary(&mut self, lhs: Expr, op: BinOp, rhs: Expr) -> Result<Type, Error> {
+    fn interpret_binary(&mut self, lhs: Expr, op: BinOp, rhs: Expr) -> Result<Type, Exception> {
         let left = self.interpret_expr(lhs)?;
         let right = self.interpret_expr(rhs)?;
 
@@ -192,6 +240,69 @@ impl Interpreter {
             BinOp::LessEqual => Type::Boolean(left_num <= right_num),
             _ => unreachable!("Non-binary operators cannot be stored in this variable"),
         })
+    }
+
+    fn interpret_func_call(
+        &mut self,
+        fn_expr: Expr,
+        arg_exprs: Vec<Expr>,
+    ) -> Result<Type, Exception> {
+        let ty = self.interpret_expr(fn_expr)?;
+        let Type::Func(func) = ty else { return Err(make(ErrorMsg::InvalidCallExpr, ty.to_string())) };
+        // Ensure the number of arguments matches the function definition
+        match func.arity().cmp(&arg_exprs.len()) {
+            Ordering::Greater => {
+                return Err(make(
+                    ErrorMsg::TooFewArgs,
+                    format!("{} arguments, expected {}", arg_exprs.len(), func.arity()),
+                ))
+            }
+            Ordering::Less => {
+                return Err(make(
+                    ErrorMsg::TooManyArgs,
+                    format!("{} arguments, expected {}", arg_exprs.len(), func.arity()),
+                ))
+            }
+            _ => (),
+        }
+        let mut args = vec![];
+        for arg in arg_exprs {
+            args.push(self.interpret_expr(arg)?);
+        }
+
+        func.call(self, args)
+    }
+
+    pub(crate) fn call_func(
+        &mut self,
+        func: Func,
+        args: Vec<Type>,
+        env: Env,
+    ) -> Result<Type, Exception> {
+        let old_env = self.env.clone();
+        let mut func_env = env;
+        // Add the function itself to the env
+        func_env.set(func.name.clone(), Type::Func(func.clone()));
+        // Add the arguments to the function env
+        for (ident, value) in func.args.into_iter().zip(args) {
+            func_env.set(ident, value);
+        }
+        self.env = Env::with_parent(func_env);
+
+        let res = self.interpret_all(func.body);
+        // Restore the env
+        self.env = old_env;
+        if let Err(exception) = res {
+            // If the exception is a return value, then propagate
+            // that as an `Ok` value with the return type, else
+            // return the error itself
+            match exception {
+                Exception::Return(val) => return Ok(val),
+                Exception::Error(_) => return Err(exception),
+            }
+        }
+
+        Ok(Type::Null)
     }
 
     fn is_eq(&self, left: &Type, right: &Type) -> bool {

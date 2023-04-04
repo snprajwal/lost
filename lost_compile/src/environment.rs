@@ -1,33 +1,27 @@
-use std::{collections::HashMap, fmt::Display};
+use std::collections::HashMap;
 
+use log::{debug, trace};
 use lost_syntax::ast::Literal;
+use once_cell::sync::Lazy;
 
-use crate::error::{make, Error, ErrorMsg};
+use crate::{
+    error::{make, ErrorMsg, Exception},
+    types::Type,
+};
 
-#[derive(Default, Debug, Clone)]
+#[derive(Debug, Default, Clone, PartialEq)]
 pub struct Env {
     values: HashMap<String, Type>,
     pub parent: Option<Box<Env>>,
 }
 
-#[derive(Clone, Debug, PartialEq)]
-pub enum Type {
-    Boolean(bool),
-    Number(f64),
-    Str(String),
-    Null,
-}
-
-impl Display for Type {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str(&match self {
-            Self::Boolean(b) => b.to_string(),
-            Self::Number(n) => n.to_string(),
-            Self::Str(s) => s.to_owned(),
-            Self::Null => "null".to_string(),
-        })
+pub static GLOBAL_ENV: Lazy<Env> = Lazy::new(|| {
+    trace!("Initialise global environment");
+    Env {
+        values: HashMap::new(),
+        parent: None,
     }
-}
+});
 
 impl Env {
     pub fn with_parent(parent: Env) -> Self {
@@ -43,7 +37,7 @@ impl Env {
         value
     }
 
-    pub fn get(&self, name: String) -> Result<Type, Error> {
+    pub fn get(&self, name: String) -> Result<Type, Exception> {
         debug!("Get {name}");
         if let Some(value) = self.values.get(&name) {
             return Ok(value.clone());
@@ -54,7 +48,7 @@ impl Env {
         Err(make(ErrorMsg::UndefinedVar, name))
     }
 
-    pub fn assign(&mut self, name: String, value: Type) -> Result<Type, Error> {
+    pub fn assign(&mut self, name: String, value: Type) -> Result<Type, Exception> {
         debug!("Assign {name} -> {value:?})");
         if self.values.contains_key(&name) {
             return Ok(self.set(name, value));
@@ -65,7 +59,7 @@ impl Env {
         Err(make(ErrorMsg::UndefinedVar, name))
     }
 
-    pub fn from_literal(&self, value: Literal) -> Result<Type, Error> {
+    pub fn from_literal(&self, value: Literal) -> Result<Type, Exception> {
         Ok(match value {
             Literal::Str(s) => Type::Str(s),
             Literal::Number(n) => Type::Number(n),

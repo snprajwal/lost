@@ -48,6 +48,8 @@ impl<'a> Parser<'a> {
                     TokenKind::IF => return self.parse_if_stmt(),
                     TokenKind::WHILE => return self.parse_while_stmt(),
                     TokenKind::FOR => return self.parse_for_stmt(),
+                    TokenKind::FN => return self.parse_function(),
+                    TokenKind::RETURN => return self.parse_return(),
                     _ => self.parse_expr_stmt(),
                 }?;
                 self.advance_or_err(TokenKind::SEMICOLON, ErrorMsg::MissingSemicolon)?;
@@ -169,6 +171,55 @@ impl<'a> Parser<'a> {
         }
 
         Ok(body)
+    }
+
+    fn parse_function(&mut self) -> Result<Item, Error> {
+        // Consume the `fn` keyword
+        self.advance();
+        let name = Literal::Ident(
+            self.advance_or_err(TokenKind::IDENT, ErrorMsg::InvalidIdent)?
+                .lexeme,
+        );
+        self.advance_or_err(TokenKind::LPAREN, ErrorMsg::MissingOpeningParen)?;
+        let mut args = vec![];
+        while self
+            .stream
+            .peek()
+            .filter(|t| t.kind == TokenKind::RPAREN)
+            .is_none()
+        {
+            args.push(Literal::Ident(
+                self.advance_or_err(TokenKind::IDENT, ErrorMsg::InvalidIdent)?
+                    .lexeme,
+            ));
+            if self.advance_if(|t| t.kind == TokenKind::COMMA).is_none() {
+                break;
+            }
+        }
+        self.advance_or_err(TokenKind::RPAREN, ErrorMsg::MissingClosingParen)?;
+        if let Some(&t) = self.stream.peek() {
+            if t.kind != TokenKind::LBRACE {
+                return Err(Self::error(t, ErrorMsg::MissingOpeningBrace));
+            }
+        }
+        let Item::Block(body) = self.parse_block()? else { unreachable!("Parsing a block must return a body") };
+
+        Ok(Item::Function { name, args, body })
+    }
+
+    fn parse_return(&mut self) -> Result<Item, Error> {
+        // Consume the `return` keyword
+        self.advance();
+        if self
+            .advance_if(|t| t.kind == TokenKind::SEMICOLON)
+            .is_some()
+        {
+            return Ok(Item::ReturnStmt(Expr::Literal(Literal::Null)));
+        }
+        let value = self.parse_expr()?;
+        self.advance_or_err(TokenKind::SEMICOLON, ErrorMsg::MissingSemicolon)?;
+
+        Ok(Item::ReturnStmt(value))
     }
 
     fn parse_expr_stmt(&mut self) -> Result<Item, Error> {
@@ -351,8 +402,39 @@ impl<'a> Parser<'a> {
                 expr: Box::new(self.parse_unary()?),
             }
         } else {
-            self.parse_primary()?
+            self.parse_func_call()?
         };
+
+        Ok(expr)
+    }
+
+    fn parse_func_call(&mut self) -> Result<Expr, Error> {
+        let mut expr = self.parse_primary()?;
+        while self
+            .stream
+            .peek()
+            .filter(|t| t.kind == TokenKind::LPAREN)
+            .is_some()
+        {
+            // Consume the opening parenthesis
+            self.advance();
+            let mut args = vec![];
+            if self.advance_if(|t| t.kind == TokenKind::RPAREN).is_none() {
+                loop {
+                    args.push(self.parse_expr()?);
+                    if self.advance_if(|t| t.kind == TokenKind::COMMA).is_none() {
+                        break;
+                    }
+                }
+                // Consume the closing parenthesis
+                self.advance_or_err(TokenKind::RPAREN, ErrorMsg::MissingClosingParen)?;
+            }
+            expr = Expr::Call {
+                func: Box::new(expr),
+                args,
+            };
+        }
+
         Ok(expr)
     }
 

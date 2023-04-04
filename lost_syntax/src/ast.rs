@@ -13,6 +13,11 @@ pub enum Item {
         name: Literal,
         init: Option<Expr>,
     },
+    Function {
+        name: Literal,
+        args: Vec<Literal>,
+        body: Vec<Item>,
+    },
     ExprStmt(Expr),
     PrintStmt(Expr),
     IfStmt {
@@ -24,6 +29,7 @@ pub enum Item {
         condition: Expr,
         body: Box<Item>,
     },
+    ReturnStmt(Expr),
     Block(Vec<Item>),
 }
 
@@ -154,4 +160,8 @@ pub enum Expr {
         rhs: Box<Expr>,
     },
     Group(Box<Expr>),
+    Call {
+        func: Box<Expr>,
+        args: Vec<Expr>,
+    },
 }

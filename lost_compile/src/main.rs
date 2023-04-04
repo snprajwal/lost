@@ -1,13 +1,8 @@
 #[macro_use]
 extern crate log;
 
-mod environment;
-mod error;
-mod interpret;
-
-use environment::Env;
-use interpret::Interpreter;
-use lost_syntax::{error::Error, lex::Lexer, parse::Parser};
+use lost_compile::{environment::Env, error::Exception, interpret::Interpreter};
+use lost_syntax::{lex::Lexer, parse::Parser};
 use std::{
     env, fs,
     io::{self, Write},
@@ -70,13 +65,21 @@ fn run_file(file_path: &str) {
     }
 }
 
-fn run(source: &str, env: Option<Env>) -> Result<Env, Vec<Error>> {
+fn run(source: &str, env: Option<Env>) -> Result<Env, Vec<Exception>> {
     let lexer = Lexer::new(source);
     trace!("Lexing {source}");
-    let tokens = lexer.lex_all_sanitised()?;
+    let tokens = lexer.lex_all_sanitised().map_err(|e| {
+        e.into_iter()
+            .map(Exception::Error)
+            .collect::<Vec<Exception>>()
+    })?;
     trace!("Parsing {tokens:#?}");
     let parser = Parser::new(&tokens);
-    let root = parser.parse_all()?;
+    let root = parser.parse_all().map_err(|e| {
+        e.into_iter()
+            .map(Exception::Error)
+            .collect::<Vec<Exception>>()
+    })?;
     trace!("Interpreting {root:#?}");
     let mut interpreter = Interpreter::new(env);
     match interpreter.interpret_all(root.items) {
