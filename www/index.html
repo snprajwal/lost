@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+
+<html>
+  <head>
+    <title>Lost REPL</title>
+    <link rel="stylesheet" href="./index.css" />
+  </head>
+  <body>
+    <div class="body-wrapper">
+      <section class="text">
+        <h1>Lost REPL</h1>
+      </section>
+
+      <section class="history">
+        <div class="scroll-wrap">
+          <div id="history-text" class="scroll code">
+            <div id="loading-message">
+              Loading the Lost interpreter as a WebAssembly module... please wait!
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="source">
+        <textarea
+          rows="2"
+          autofocus
+          id="source-input"
+          class="code"
+          placeholder="You can enter Lost code here after the interpreter is loaded!"
+          disabled
+        ></textarea>
+      </section>
+
+      <h4>Not familiar with the syntax? Get started <a href="https://github.com/snprajwal/lost#getting-started" target="_blank">here</a></h4>
+    </div>
+    <script src="./bootstrap.js"></script>
+  </body>
+</html>

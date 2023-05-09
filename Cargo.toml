@@ -1,2 +1,9 @@
 [workspace]
-members = ["lost_syntax", "lost_compile"]
+members = ["lost_syntax", "lost_compile", "lost_playground"]
+
+[profile.release]
+lto = true
+strip = true
+
+[profile.release.package.lost_playground]
+opt-level = "z"
