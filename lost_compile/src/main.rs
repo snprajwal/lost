@@ -1,7 +1,7 @@
 #[macro_use]
 extern crate log;
 
-use lost_compile::{environment::Env, error::Exception, interpret::Interpreter};
+use lost_compile::{environment::Env, error::Exception, interpret::Interpreter, stdlib};
 use lost_syntax::{lex::Lexer, parse::Parser};
 use std::{
     env, fs,
@@ -38,6 +38,11 @@ fn run_repl() {
     let (stdin, mut stdout) = (io::stdin(), io::stdout());
     let mut code = String::default();
     let mut env = Env::default();
+    // Initialise IO builtins
+    stdlib::init_io(&mut env);
+    // Set the stdlib globals in the
+    // parent of the active env
+    env = Env::with_parent(env);
     loop {
         let mut line = String::default();
         print!(">>> ");

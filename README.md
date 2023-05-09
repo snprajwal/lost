@@ -21,16 +21,16 @@ The syntax is fairly straightforward, and borrows the best syntaxes of existing 
 ```rust
 fn foo(n) {
     if (n == 0) {
-        print "Zero";
+        print("Zero");
         while (n <= 1) {
-            print n;
+            print(n);
             n = n + 1;
         }
         return true;
     } else {
-        print "Not zero";
+        print("Not zero");
         for (let i = 0; i < n; i = i + 1) {
-            print i;
+            print(i);
         }
         return false;
     }
@@ -38,9 +38,9 @@ fn foo(n) {
 
 let n = 5; // All numbers are handled as floating point values
 let isZero = foo(n);
-print isZero; // false
-print foo(0); // true
+print(isZero); // false
+print(foo(0)); // true
 
 let a; // Uninitialised variables are null by default
-print a; // null
+print(a); // null
 ```

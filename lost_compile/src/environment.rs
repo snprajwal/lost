@@ -1,8 +1,7 @@
 use std::collections::HashMap;
 
-use log::{debug, trace};
+use log::debug;
 use lost_syntax::ast::Literal;
-use once_cell::sync::Lazy;
 
 use crate::{
     error::{make, ErrorMsg, Exception},
@@ -14,14 +13,6 @@ pub struct Env {
     values: HashMap<String, Type>,
     pub parent: Option<Box<Env>>,
 }
-
-pub static GLOBAL_ENV: Lazy<Env> = Lazy::new(|| {
-    trace!("Initialise global environment");
-    Env {
-        values: HashMap::new(),
-        parent: None,
-    }
-});
 
 impl Env {
     pub fn with_parent(parent: Env) -> Self {

@@ -243,8 +243,8 @@ mod tests {
     fn keywords() {
         lex_test(
             r#"
-            and class else false fn for if null or
-            print return super this true let while
+            and class else false fn for if null
+            or return super this true let while
             "#,
             vec![
                 (TokenKind::AND, "and"),
@@ -256,7 +256,6 @@ mod tests {
                 (TokenKind::IF, "if"),
                 (TokenKind::NULL, "null"),
                 (TokenKind::OR, "or"),
-                (TokenKind::PRINT, "print"),
                 (TokenKind::RETURN, "return"),
                 (TokenKind::SUPER, "super"),
                 (TokenKind::THIS, "this"),

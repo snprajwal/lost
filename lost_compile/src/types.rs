@@ -29,7 +29,7 @@ impl Display for Type {
 
 pub trait Callable {
     fn arity(&self) -> usize;
-    fn call(self, interpreter: &mut Interpreter, args: Vec<Type>) -> Result<Type, Exception>;
+    fn call(&self, interpreter: &mut Interpreter, args: Vec<Type>) -> Result<Type, Exception>;
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -50,8 +50,8 @@ impl Callable for Func {
     fn arity(&self) -> usize {
         self.args.len()
     }
-    fn call(self, interpreter: &mut Interpreter, args: Vec<Type>) -> Result<Type, Exception> {
-        interpreter.call_func(self.clone(), args, self.env)
+    fn call(&self, interpreter: &mut Interpreter, args: Vec<Type>) -> Result<Type, Exception> {
+        interpreter.call_func(self.clone(), args, self.env.clone())
     }
 }
 
@@ -91,7 +91,7 @@ impl Callable for NativeFunc {
     fn arity(&self) -> usize {
         self.args.len()
     }
-    fn call(self, interpreter: &mut Interpreter, args: Vec<Type>) -> Result<Type, Exception> {
+    fn call(&self, interpreter: &mut Interpreter, args: Vec<Type>) -> Result<Type, Exception> {
         (self.body)(interpreter, args)
     }
 }

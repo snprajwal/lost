@@ -35,11 +35,8 @@ impl Interpreter {
         self.interpret_stmt(item)
     }
 
-    // This is a hack to allow PrintStmt for debugging,
-    // and will be removed once functions are introduced
     fn interpret_stmt(&mut self, stmt: Item) -> Result<(), Exception> {
         match stmt {
-            Item::PrintStmt(expr) => println!("{}", self.interpret_expr(expr)?),
             Item::ExprStmt(expr) => {
                 self.interpret_expr(expr)?;
             }
@@ -248,7 +245,11 @@ impl Interpreter {
         arg_exprs: Vec<Expr>,
     ) -> Result<Type, Exception> {
         let ty = self.interpret_expr(fn_expr)?;
-        let Type::Func(func) = ty else { return Err(make(ErrorMsg::InvalidCallExpr, ty.to_string())) };
+        let func: Box<dyn Callable> = match ty {
+            Type::Func(f) => Box::new(f),
+            Type::NativeFunc(f) => Box::new(f),
+            _ => return Err(make(ErrorMsg::InvalidCallExpr, ty.to_string())),
+        };
         // Ensure the number of arguments matches the function definition
         match func.arity().cmp(&arg_exprs.len()) {
             Ordering::Greater => {

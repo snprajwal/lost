@@ -43,7 +43,6 @@ impl<'a> Parser<'a> {
             Some(&t) => {
                 let item = match t.kind {
                     TokenKind::LET => self.parse_let_stmt(),
-                    TokenKind::PRINT => self.parse_print(),
                     TokenKind::LBRACE => return self.parse_block(),
                     TokenKind::IF => return self.parse_if_stmt(),
                     TokenKind::WHILE => return self.parse_while_stmt(),
@@ -73,12 +72,6 @@ impl<'a> Parser<'a> {
             name: Literal::Ident(name.lexeme.clone()),
             init,
         })
-    }
-
-    fn parse_print(&mut self) -> Result<Item, Error> {
-        // Consume the `print` keyword
-        self.advance();
-        Ok(Item::PrintStmt(self.parse_expr()?))
     }
 
     fn parse_if_stmt(&mut self) -> Result<Item, Error> {
@@ -518,7 +511,6 @@ impl<'a> Parser<'a> {
                         | TokenKind::FOR
                         | TokenKind::IF
                         | TokenKind::WHILE
-                        | TokenKind::PRINT
                         | TokenKind::RETURN
                 )
             })
@@ -571,16 +563,6 @@ mod tests {
     }
 
     #[test]
-    fn print_stmt() {
-        parse_test(
-            "print 1;",
-            Source {
-                items: vec![Item::PrintStmt(Expr::Literal(Literal::Number(1.0)))],
-            },
-        );
-    }
-
-    #[test]
     fn expr_stmt() {
         parse_test(
             "2.0;",
@@ -593,14 +575,14 @@ mod tests {
     #[test]
     fn if_stmt() {
         parse_test(
-            "if (true) { print 1; } else { print 0; }",
+            "if (true) { 1; } else { 0; }",
             Source {
                 items: vec![Item::IfStmt {
                     condition: Expr::Literal(Literal::Boolean(true)),
-                    if_item: Box::new(Item::Block(vec![Item::PrintStmt(Expr::Literal(
+                    if_item: Box::new(Item::Block(vec![Item::ExprStmt(Expr::Literal(
                         Literal::Number(1.0),
                     ))])),
-                    else_item: Some(Box::new(Item::Block(vec![Item::PrintStmt(Expr::Literal(
+                    else_item: Some(Box::new(Item::Block(vec![Item::ExprStmt(Expr::Literal(
                         Literal::Number(0.0),
                     ))]))),
                 }],
@@ -611,11 +593,11 @@ mod tests {
     #[test]
     fn while_stmt() {
         parse_test(
-            "while (true) { print 1; }",
+            "while (true) { 1; }",
             Source {
                 items: vec![Item::WhileStmt {
                     condition: Expr::Literal(Literal::Boolean(true)),
-                    body: Box::new(Item::Block(vec![Item::PrintStmt(Expr::Literal(
+                    body: Box::new(Item::Block(vec![Item::ExprStmt(Expr::Literal(
                         Literal::Number(1.0),
                     ))])),
                 }],
@@ -627,7 +609,7 @@ mod tests {
     fn for_stmt() {
         let var = "a".to_string();
         parse_test(
-            "for (let a = 0; a < 5; a = a + 1) { print a; }",
+            "for (let a = 0; a < 5; a = a + 1) { a; }",
             Source {
                 items: vec![Item::Block(vec![
                     Item::LetStmt {
@@ -641,7 +623,7 @@ mod tests {
                             rhs: Box::new(Expr::Literal(Literal::Number(5.0))),
                         },
                         body: Box::new(Item::Block(vec![
-                            Item::Block(vec![Item::PrintStmt(Expr::Literal(Literal::Ident(
+                            Item::Block(vec![Item::ExprStmt(Expr::Literal(Literal::Ident(
                                 var.clone(),
                             )))]),
                             Item::ExprStmt(Expr::Assignment {
@@ -715,7 +697,7 @@ mod tests {
     #[test]
     fn missing_closing_brace() {
         parse_err_test(
-            "{ print a;",
+            "{ a;",
             format!(
                 "Parse error: {} end of stream",
                 ErrorMsg::MissingClosingBrace

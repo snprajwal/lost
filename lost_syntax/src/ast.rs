@@ -19,7 +19,6 @@ pub enum Item {
         body: Vec<Item>,
     },
     ExprStmt(Expr),
-    PrintStmt(Expr),
     IfStmt {
         condition: Expr,
         if_item: Box<Item>,
