@@ -73,6 +73,10 @@ impl<'a> Lexer<'a> {
                     '<' => {
                         Ok(self.lookahead_for_token('=', TokenKind::LESS_EQUAL, TokenKind::LESS))
                     }
+                    '+' => Ok(self.lookahead_for_token('+', TokenKind::INCREMENT, TokenKind::PLUS)),
+                    '-' => {
+                        Ok(self.lookahead_for_token('-', TokenKind::DECREMENT, TokenKind::MINUS))
+                    }
                     '/' => Ok(self.lex_slash_or_comment()),
                     '"' => self.lex_string(),
                     _ => {

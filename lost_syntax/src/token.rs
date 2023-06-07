@@ -33,6 +33,9 @@ pub enum TokenKind {
     PLUS,
     SLASH,
     STAR,
+    MODULO,
+    INCREMENT,
+    DECREMENT,
     // Comparisons
     BANG_EQUAL,
     EQUAL,
@@ -80,6 +83,7 @@ impl TokenKind {
             '+' => Self::PLUS,
             ';' => Self::SEMICOLON,
             '*' => Self::STAR,
+            '%' => Self::MODULO,
             '=' => Self::EQUAL,
             '>' => Self::GREATER,
             '<' => Self::LESS,

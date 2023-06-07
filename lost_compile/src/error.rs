@@ -22,6 +22,7 @@ pub enum ErrorMsg {
     // Runtime errors
     ExpectedNumber,
     ExpectedNumOrStr,
+    ExpectedIdent,
     InvalidStrOp,
     InvalidCallExpr,
     TooManyArgs,
@@ -35,6 +36,7 @@ impl Display for ErrorMsg {
         f.write_str(match self {
             Self::ExpectedNumber => "expected numeric operand",
             Self::ExpectedNumOrStr => "expected both operands to be numeric or string",
+            Self::ExpectedIdent => "expected identifier",
             Self::InvalidStrOp => "invalid operation on strings",
             Self::InvalidCallExpr => "cannot call this function",
             Self::TooManyArgs => "too many arguments in function call",

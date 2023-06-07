@@ -36,6 +36,8 @@ pub enum Item {
 pub enum UnaryOp {
     Bang,
     Minus,
+    Increment,
+    Decrement,
 }
 
 impl UnaryOp {
@@ -43,6 +45,8 @@ impl UnaryOp {
         let op = match t {
             TokenKind::BANG => Self::Bang,
             TokenKind::MINUS => Self::Minus,
+            TokenKind::INCREMENT => Self::Increment,
+            TokenKind::DECREMENT => Self::Decrement,
             _ => return None,
         };
         Some(op)
@@ -55,6 +59,7 @@ pub enum BinOp {
     Star,
     Plus,
     Minus,
+    Modulo,
     Greater,
     GreaterEqual,
     Less,
@@ -70,6 +75,7 @@ impl Display for BinOp {
             Self::Star => "*",
             Self::Plus => "+",
             Self::Minus => "-",
+            Self::Modulo => "%",
             Self::Greater => ">",
             Self::GreaterEqual => ">=",
             Self::Less => "<",
@@ -87,6 +93,7 @@ impl BinOp {
             TokenKind::STAR => Self::Star,
             TokenKind::PLUS => Self::Plus,
             TokenKind::MINUS => Self::Minus,
+            TokenKind::MODULO => Self::Modulo,
             TokenKind::GREATER => Self::Greater,
             TokenKind::GREATER_EQUAL => Self::GreaterEqual,
             TokenKind::LESS => Self::Less,

@@ -162,7 +162,7 @@ impl Interpreter {
     }
 
     fn interpret_unary(&mut self, op: UnaryOp, expr: Expr) -> Result<Type, Exception> {
-        let lit = self.interpret_expr(expr)?;
+        let lit = self.interpret_expr(expr.clone())?;
         match op {
             UnaryOp::Minus => {
                 if let Type::Number(n) = lit {
@@ -172,6 +172,28 @@ impl Interpreter {
                 }
             }
             UnaryOp::Bang => return Ok(Type::Boolean(!self.to_bool(&lit))),
+            UnaryOp::Increment => {
+                let Expr::Literal(Literal::Ident(ident)) = expr else {
+                    return Err(make(ErrorMsg::ExpectedIdent, lit.to_string()))
+                };
+                if let Type::Number(n) = lit {
+                    self.env.assign(ident, Type::Number(n + 1.0))?;
+                    Ok(Type::Number(n + 1.0))
+                } else {
+                    Err(make(ErrorMsg::ExpectedNumber, lit.to_string()))
+                }
+            }
+            UnaryOp::Decrement => {
+                let Expr::Literal(Literal::Ident(ident)) = expr else {
+                    return Err(make(ErrorMsg::ExpectedIdent, lit.to_string()))
+                };
+                if let Type::Number(n) = lit {
+                    self.env.assign(ident, Type::Number(n - 1.0))?;
+                    Ok(Type::Number(n - 1.0))
+                } else {
+                    Err(make(ErrorMsg::ExpectedNumber, lit.to_string()))
+                }
+            }
         }
     }
 
@@ -230,6 +252,7 @@ impl Interpreter {
             BinOp::Plus => Type::Number(left_num + right_num),
             BinOp::Minus => Type::Number(left_num - right_num),
             BinOp::Star => Type::Number(left_num * right_num),
+            BinOp::Modulo => Type::Number(left_num % right_num),
             BinOp::Slash => Type::Number(left_num / right_num),
             BinOp::Greater => Type::Boolean(left_num > right_num),
             BinOp::GreaterEqual => Type::Boolean(left_num >= right_num),

@@ -350,9 +350,12 @@ impl<'a> Parser<'a> {
 
     fn parse_term(&mut self) -> Result<Expr, Error> {
         let mut lhs = self.parse_factor()?;
-        while let Some(op) =
-            self.advance_if(|t| matches!(t.kind, TokenKind::PLUS | TokenKind::MINUS))
-        {
+        while let Some(op) = self.advance_if(|t| {
+            matches!(
+                t.kind,
+                TokenKind::PLUS | TokenKind::MINUS | TokenKind::MODULO
+            )
+        }) {
             // Infallible unwrap as we are ensuring the right token kind above
             let bin_op = ast::BinOp::from_token(op.kind)
                 .expect("Non-binary operators cannot be present here");
@@ -385,13 +388,16 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_unary(&mut self) -> Result<Expr, Error> {
-        let expr = if let Some(op) =
-            self.advance_if(|t| matches!(t.kind, TokenKind::BANG | TokenKind::MINUS))
-        {
+        let expr = if let Some(op) = self.advance_if(|t| {
+            matches!(
+                t.kind,
+                TokenKind::BANG | TokenKind::MINUS | TokenKind::INCREMENT | TokenKind::DECREMENT
+            )
+        }) {
             Expr::Unary {
                 // Infallible unwrap as we are ensuring the right token kind above
                 op: ast::UnaryOp::from_token(op.kind)
-                    .expect("Non-binary operators cannot be present here"),
+                    .expect("Non-unary operators cannot be present here"),
                 expr: Box::new(self.parse_unary()?),
             }
         } else {

@@ -29,7 +29,7 @@ fn foo(n) {
         return true;
     } else {
         print("Not zero");
-        for (let i = 0; i < n; i = i + 1) {
+        for (let i = 0; i < n; ++i) {
             print(i);
         }
         return false;
