@@ -195,7 +195,7 @@ impl<'a> Parser<'a> {
                 return Err(Self::error(t, ErrorMsg::MissingOpeningBrace));
             }
         }
-        let Item::Block(body) = self.parse_block()? else { unreachable!("Parsing a block must return a body") };
+        let Item::Block(body) = self.parse_block()? else { unreachable!("parsing a block must return a body") };
 
         Ok(Item::Function { name, args, body })
     }
@@ -313,7 +313,7 @@ impl<'a> Parser<'a> {
         {
             // Infallible unwrap as we are ensuring the right token kind above
             let bin_op = ast::BinOp::from_token(op.kind)
-                .expect("Non-binary operators cannot be present here");
+                .expect("non-binary operators cannot be present here");
             let rhs = self.parse_cmp()?;
             lhs = Expr::Binary {
                 lhs: Box::new(lhs),
@@ -337,7 +337,7 @@ impl<'a> Parser<'a> {
         }) {
             // Infallible unwrap as we are ensuring the right token kind above
             let bin_op = ast::BinOp::from_token(op.kind)
-                .expect("Non-binary operators cannot be present here");
+                .expect("non-binary operators cannot be present here");
             let rhs = self.parse_term()?;
             lhs = Expr::Binary {
                 lhs: Box::new(lhs),
@@ -358,7 +358,7 @@ impl<'a> Parser<'a> {
         }) {
             // Infallible unwrap as we are ensuring the right token kind above
             let bin_op = ast::BinOp::from_token(op.kind)
-                .expect("Non-binary operators cannot be present here");
+                .expect("non-binary operators cannot be present here");
             let rhs = self.parse_factor()?;
             lhs = Expr::Binary {
                 lhs: Box::new(lhs),
@@ -376,7 +376,7 @@ impl<'a> Parser<'a> {
         {
             // Infallible unwrap as we are ensuring the right token kind above
             let bin_op = ast::BinOp::from_token(op.kind)
-                .expect("Non-binary operators cannot be present here");
+                .expect("non-binary operators cannot be present here");
             let rhs = self.parse_unary()?;
             lhs = Expr::Binary {
                 lhs: Box::new(lhs),
@@ -397,7 +397,7 @@ impl<'a> Parser<'a> {
             Expr::Unary {
                 // Infallible unwrap as we are ensuring the right token kind above
                 op: ast::UnaryOp::from_token(op.kind)
-                    .expect("Non-unary operators cannot be present here"),
+                    .expect("non-unary operators cannot be present here"),
                 expr: Box::new(self.parse_unary()?),
             }
         } else {
@@ -444,7 +444,7 @@ impl<'a> Parser<'a> {
                 TokenKind::FALSE => Literal::Boolean(false),
                 TokenKind::NULL => Literal::Null,
                 TokenKind::NUMBER => {
-                    Literal::Number(t.lexeme.parse().expect("Failed to parse number"))
+                    Literal::Number(t.lexeme.parse().expect("failed to parse number"))
                 }
                 TokenKind::STRING => Literal::Str(t.lexeme.clone()),
                 TokenKind::LPAREN => return self.parse_group(),

@@ -55,7 +55,7 @@ fn init_io(env: &mut Env) {
             name: "print".to_string(),
             args: vec!["arg".to_string()],
             body: |_, args| {
-                let arg = args.first().expect("Argument not present");
+                let arg = args.first().expect("argument not present");
                 WORLD.lock().unwrap().output.push_str(&arg.to_string());
                 Ok(Type::Number(arg.to_string().len() as f64))
             },

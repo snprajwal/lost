@@ -59,7 +59,7 @@ impl Interpreter {
     }
 
     fn interpret_let_stmt(&mut self, name: Literal, init: Option<Expr>) -> Result<(), Exception> {
-        let Literal::Ident(ident) = name else { unreachable!("Non-identifiers cannot be passed to this function") };
+        let Literal::Ident(ident) = name else { unreachable!("non-identifiers cannot be passed to this function") };
         let value = match init {
             Some(expr) => self.interpret_expr(expr)?,
             None => Type::Null,
@@ -106,7 +106,7 @@ impl Interpreter {
             .env
             .clone()
             .parent
-            .expect("Parent env must be present for block envs");
+            .expect("parent env must be present for block envs");
 
         Ok(Type::Null)
     }
@@ -117,14 +117,14 @@ impl Interpreter {
         args: Vec<Literal>,
         body: Vec<Item>,
     ) -> Result<(), Exception> {
-        let Literal::Ident(ident) = name else { unreachable!("Non-identifiers cannot be passed to this function") };
+        let Literal::Ident(ident) = name else { unreachable!("non-identifiers cannot be passed to this function") };
         let arg_idents = args
             .into_iter()
             .map(|arg| {
                 if let Literal::Ident(arg_ident) = arg {
                     arg_ident
                 } else {
-                    unreachable!("Non-identifiers cannot be passed to this function");
+                    unreachable!("non-identifiers cannot be passed to this function");
                 }
             })
             .collect();
@@ -258,7 +258,7 @@ impl Interpreter {
             BinOp::GreaterEqual => Type::Boolean(left_num >= right_num),
             BinOp::Less => Type::Boolean(left_num < right_num),
             BinOp::LessEqual => Type::Boolean(left_num <= right_num),
-            _ => unreachable!("Non-binary operators cannot be stored in this variable"),
+            _ => unreachable!("non-binary operators cannot be stored in this variable"),
         })
     }
 

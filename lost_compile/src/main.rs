@@ -46,8 +46,8 @@ fn run_repl() {
     loop {
         let mut line = String::default();
         print!(">>> ");
-        stdout.flush().expect("Failed to flush stdout");
-        let n = stdin.read_line(&mut line).expect("Failed to read line");
+        stdout.flush().expect("failed to flush stdout");
+        let n = stdin.read_line(&mut line).expect("failed to read line");
         // If zero bytes are read, then exit (usually triggered by Ctrl-D)
         if n == 0 {
             break;
@@ -63,7 +63,7 @@ fn run_repl() {
 }
 
 fn run_file(file_path: &str) {
-    let source = fs::read_to_string(file_path).expect("Failed to read file");
+    let source = fs::read_to_string(file_path).expect("failed to read file");
     match run(&source, None) {
         Ok(_) => println!("Ran successfully"),
         Err(errors) => errors.iter().for_each(|e| eprintln!("{e}")),
