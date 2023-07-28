@@ -25,10 +25,12 @@ pub enum ErrorMsg {
     ExpectedIdent,
     InvalidStrOp,
     InvalidCallExpr,
+    InvalidObject,
     TooManyArgs,
     TooFewArgs,
     // Memory errors
     UndefinedVar,
+    UndefinedMember,
 }
 
 impl Display for ErrorMsg {
@@ -39,9 +41,11 @@ impl Display for ErrorMsg {
             Self::ExpectedIdent => "expected identifier",
             Self::InvalidStrOp => "invalid operation on strings",
             Self::InvalidCallExpr => "cannot call this function",
+            Self::InvalidObject => "cannot use this as an object",
             Self::TooManyArgs => "too many arguments in function call",
             Self::TooFewArgs => "too few arguments in function call",
             Self::UndefinedVar => "undefined variable",
+            Self::UndefinedMember => "undefined member",
         })
     }
 }

@@ -64,7 +64,13 @@ fn run_repl() {
 
 fn run_file(file_path: &str) {
     let source = fs::read_to_string(file_path).expect("failed to read file");
-    match run(&source, None) {
+    let mut env = Env::default();
+    // Initialise IO builtins
+    stdlib::init_io(&mut env);
+    // Set the stdlib globals in the
+    // parent of the active env
+    env = Env::with_parent(env);
+    match run(&source, Some(env)) {
         Ok(_) => println!("Ran successfully"),
         Err(errors) => errors.iter().for_each(|e| eprintln!("{e}")),
     }

@@ -15,6 +15,7 @@ pub enum ErrorMsg {
     MissingClosingBrace,
     MissingSemicolon,
     InvalidIdent,
+    InvalidField,
     InvalidAssignment,
     // EOF
     EndOfStream,
@@ -32,6 +33,7 @@ impl Display for ErrorMsg {
             Self::MissingClosingBrace => "missing closing brace at",
             Self::MissingSemicolon => "missing semicolon at",
             Self::InvalidIdent => "invalid identifier",
+            Self::InvalidField => "invalid field",
             Self::InvalidAssignment => "invalid assignment target",
             Self::EndOfStream => "end of stream",
         })

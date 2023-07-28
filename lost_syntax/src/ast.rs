@@ -9,14 +9,18 @@ pub struct Source {
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum Item {
-    LetStmt {
+    Class {
         name: Literal,
-        init: Option<Expr>,
+        methods: Vec<Item>,
     },
     Function {
         name: Literal,
         args: Vec<Literal>,
         body: Vec<Item>,
+    },
+    LetStmt {
+        name: Literal,
+        init: Option<Expr>,
     },
     ExprStmt(Expr),
     IfStmt {
@@ -169,5 +173,14 @@ pub enum Expr {
     Call {
         func: Box<Expr>,
         args: Vec<Expr>,
+    },
+    FieldGet {
+        object: Box<Expr>,
+        field: Literal,
+    },
+    FieldSet {
+        object: Box<Expr>,
+        field: Literal,
+        value: Box<Expr>,
     },
 }

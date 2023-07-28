@@ -1,8 +1,15 @@
-use std::fmt::{Debug, Display};
+use std::{
+    collections::HashMap,
+    fmt::{Debug, Display},
+};
 
 use lost_syntax::ast::Item;
 
-use crate::{environment::Env, error::Exception, interpret::Interpreter};
+use crate::{
+    environment::Env,
+    error::{make, ErrorMsg, Exception},
+    interpret::Interpreter,
+};
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum Type {
@@ -11,6 +18,8 @@ pub enum Type {
     Str(String),
     Func(Func),
     NativeFunc(NativeFunc),
+    Class(Class),
+    Instance(Instance),
     Null,
 }
 
@@ -22,6 +31,8 @@ impl Display for Type {
             Self::Str(s) => s.to_owned(),
             Self::Func(f) => f.to_string(),
             Self::NativeFunc(f) => f.to_string(),
+            Self::Class(c) => c.to_string(),
+            Self::Instance(i) => i.to_string(),
             Self::Null => "null".to_string(),
         })
     }
@@ -42,7 +53,7 @@ pub struct Func {
 
 impl Display for Func {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_fmt(format_args!("fn {}({})", self.name, self.args.join(", ")))
+        f.write_str(&format!("fn {}({})", self.name, self.args.join(", ")))
     }
 }
 
@@ -79,7 +90,7 @@ impl Debug for NativeFunc {
 
 impl Display for NativeFunc {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_fmt(format_args!(
+        f.write_str(&format!(
             "native fn {}({})",
             self.name,
             self.args.join(", ")
@@ -93,5 +104,62 @@ impl Callable for NativeFunc {
     }
     fn call(&self, interpreter: &mut Interpreter, args: Vec<Type>) -> Result<Type, Exception> {
         (self.body)(interpreter, args)
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct Class {
+    pub name: String,
+    pub methods: HashMap<String, Func>,
+}
+
+impl Display for Class {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&format!("class {}", self.name))
+    }
+}
+
+impl Callable for Class {
+    fn arity(&self) -> usize {
+        0
+    }
+    fn call(&self, _: &mut Interpreter, _: Vec<Type>) -> Result<Type, Exception> {
+        Ok(Type::Instance(Instance {
+            fields: HashMap::default(),
+            class: self.clone(),
+        }))
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct Instance {
+    pub class: Class,
+    fields: HashMap<String, Type>,
+}
+
+impl Display for Instance {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&format!("instance {}", self.class.name))
+    }
+}
+
+impl Instance {
+    pub fn get(&self, member: String) -> Result<Type, Exception> {
+        if let Some(value) = self.fields.get(&member) {
+            return Ok(value.clone());
+        }
+        if let Some(value) = self.class.methods.get(&member) {
+            let mut func = value.clone();
+            func.env = Env::with_parent(func.env);
+            func.env
+                .set("this".to_string(), Type::Instance(self.clone()));
+            return Ok(Type::Func(func));
+        }
+        Err(make(ErrorMsg::UndefinedMember, member))
+    }
+
+    pub fn set(&mut self, field: String, value: Type) -> Result<Type, Exception> {
+        self.fields.insert(field, value.clone());
+        Ok(value)
     }
 }

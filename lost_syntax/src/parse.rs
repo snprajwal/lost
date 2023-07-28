@@ -47,6 +47,7 @@ impl<'a> Parser<'a> {
                     TokenKind::IF => return self.parse_if_stmt(),
                     TokenKind::WHILE => return self.parse_while_stmt(),
                     TokenKind::FOR => return self.parse_for_stmt(),
+                    TokenKind::CLASS => return self.parse_class(),
                     TokenKind::FN => return self.parse_function(),
                     TokenKind::RETURN => return self.parse_return(),
                     _ => self.parse_expr_stmt(),
@@ -166,6 +167,28 @@ impl<'a> Parser<'a> {
         Ok(body)
     }
 
+    fn parse_class(&mut self) -> Result<Item, Error> {
+        // Consume the `class` keyword
+        self.advance();
+        let name = Literal::Ident(
+            self.advance_or_err(TokenKind::IDENT, ErrorMsg::InvalidIdent)?
+                .lexeme,
+        );
+        self.advance_or_err(TokenKind::LBRACE, ErrorMsg::MissingOpeningBrace)?;
+        let mut methods = vec![];
+        while self
+            .stream
+            .peek()
+            .filter(|t| t.kind == TokenKind::RBRACE)
+            .is_none()
+        {
+            methods.push(self.parse_function()?);
+        }
+        self.advance_or_err(TokenKind::RBRACE, ErrorMsg::MissingClosingBrace)?;
+
+        Ok(Item::Class { name, methods })
+    }
+
     fn parse_function(&mut self) -> Result<Item, Error> {
         // Consume the `fn` keyword
         self.advance();
@@ -195,7 +218,9 @@ impl<'a> Parser<'a> {
                 return Err(Self::error(t, ErrorMsg::MissingOpeningBrace));
             }
         }
-        let Item::Block(body) = self.parse_block()? else { unreachable!("parsing a block must return a body") };
+        let Item::Block(body) = self.parse_block()? else {
+            unreachable!("parsing a block must return a body")
+        };
 
         Ok(Item::Function { name, args, body })
     }
@@ -250,33 +275,50 @@ impl<'a> Parser<'a> {
 
     fn parse_assignment(&mut self) -> Result<Expr, Error> {
         let lhs = self.parse_logical_or()?;
-        let Some(eq) = (
-            if self
-                .stream
-                .peek()
-                .filter(|&&t| t.kind == TokenKind::EQUAL)
-                .is_some() {
-                self.stream.next()
-            } else {
-                None
-            }
-        ) else {
+        let Some(eq) = (if self
+            .stream
+            .peek()
+            .filter(|&&t| t.kind == TokenKind::EQUAL)
+            .is_some()
+        {
+            self.stream.next()
+        } else {
+            None
+        }) else {
             return Ok(lhs);
         };
         let rhs = self.parse_assignment()?;
-        if let Expr::Literal(lit @ Literal::Ident(_)) = lhs {
-            return Ok(Expr::Assignment {
+        match lhs {
+            Expr::Literal(lit @ Literal::Ident(_)) => Ok(Expr::Assignment {
                 name: lit,
                 value: Box::new(rhs),
-            });
-        } else {
-            // The error is manually generated as there is
-            // no single token for the lvalue identifier
-            return Err(format!(
-                "Parse error at line {}: {}",
-                eq.line + 1,
-                ErrorMsg::InvalidAssignment,
-            ));
+            }),
+            Expr::FieldGet { object, field } => {
+                if matches!(field, Literal::Ident(_)) {
+                    Ok(Expr::FieldSet {
+                        object,
+                        field,
+                        value: Box::new(rhs),
+                    })
+                } else {
+                    // The error is manually generated as there is
+                    // no single token for the lvalue identifier
+                    Err(format!(
+                        "Parse error at line {}: {}",
+                        eq.line + 1,
+                        ErrorMsg::InvalidField,
+                    ))
+                }
+            }
+            _ => {
+                // The error is manually generated as there is
+                // no single token for the lvalue identifier
+                Err(format!(
+                    "Parse error at line {}: {}",
+                    eq.line + 1,
+                    ErrorMsg::InvalidAssignment,
+                ))
+            }
         }
     }
 
@@ -409,29 +451,42 @@ impl<'a> Parser<'a> {
 
     fn parse_func_call(&mut self) -> Result<Expr, Error> {
         let mut expr = self.parse_primary()?;
-        while self
-            .stream
-            .peek()
-            .filter(|t| t.kind == TokenKind::LPAREN)
-            .is_some()
-        {
-            // Consume the opening parenthesis
-            self.advance();
-            let mut args = vec![];
-            if self.advance_if(|t| t.kind == TokenKind::RPAREN).is_none() {
-                loop {
-                    args.push(self.parse_expr()?);
-                    if self.advance_if(|t| t.kind == TokenKind::COMMA).is_none() {
-                        break;
+        loop {
+            if let Some(t) = self.stream.peek() {
+                match t.kind {
+                    TokenKind::LPAREN => {
+                        // Consume the opening parenthesis
+                        self.advance();
+                        let mut args = vec![];
+                        if self.advance_if(|t| t.kind == TokenKind::RPAREN).is_none() {
+                            loop {
+                                args.push(self.parse_expr()?);
+                                if self.advance_if(|t| t.kind == TokenKind::COMMA).is_none() {
+                                    break;
+                                }
+                            }
+                            // Consume the closing parenthesis
+                            self.advance_or_err(TokenKind::RPAREN, ErrorMsg::MissingClosingParen)?;
+                        }
+                        expr = Expr::Call {
+                            func: Box::new(expr),
+                            args,
+                        };
                     }
+                    TokenKind::DOT => {
+                        // Consume the dot
+                        self.advance();
+                        expr = Expr::FieldGet {
+                            object: Box::new(expr),
+                            field: Literal::Ident(
+                                self.advance_or_err(TokenKind::IDENT, ErrorMsg::InvalidIdent)?
+                                    .lexeme,
+                            ),
+                        }
+                    }
+                    _ => break,
                 }
-                // Consume the closing parenthesis
-                self.advance_or_err(TokenKind::RPAREN, ErrorMsg::MissingClosingParen)?;
             }
-            expr = Expr::Call {
-                func: Box::new(expr),
-                args,
-            };
         }
 
         Ok(expr)
@@ -448,7 +503,7 @@ impl<'a> Parser<'a> {
                 }
                 TokenKind::STRING => Literal::Str(t.lexeme.clone()),
                 TokenKind::LPAREN => return self.parse_group(),
-                TokenKind::IDENT => Literal::Ident(t.lexeme.clone()),
+                TokenKind::IDENT | TokenKind::THIS => Literal::Ident(t.lexeme.clone()),
                 _ => return Err(Self::error(t, ErrorMsg::UnexpectedToken)),
             },
             None => return Err(format!("Parse error: {}", ErrorMsg::EndOfStream)),

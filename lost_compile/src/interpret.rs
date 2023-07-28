@@ -1,9 +1,9 @@
-use std::cmp::Ordering;
+use std::{cmp::Ordering, collections::HashMap};
 
 use crate::{
     environment::Env,
     error::{make, ErrorMsg, Exception},
-    types::{Callable, Func, Type},
+    types::{Callable, Class, Func, Type},
 };
 use lost_syntax::ast::{BinOp, Expr, Item, Literal, LogicalOp, UnaryOp};
 
@@ -54,12 +54,15 @@ impl Interpreter {
             Item::Function { name, args, body } => {
                 return self.interpret_function(name, args, body)
             }
+            Item::Class { name, methods } => return self.interpret_class(name, methods),
         };
         Ok(())
     }
 
     fn interpret_let_stmt(&mut self, name: Literal, init: Option<Expr>) -> Result<(), Exception> {
-        let Literal::Ident(ident) = name else { unreachable!("non-identifiers cannot be passed to this function") };
+        let Literal::Ident(ident) = name else {
+            unreachable!("non-identifiers cannot be passed to this function")
+        };
         let value = match init {
             Some(expr) => self.interpret_expr(expr)?,
             None => Type::Null,
@@ -117,7 +120,15 @@ impl Interpreter {
         args: Vec<Literal>,
         body: Vec<Item>,
     ) -> Result<(), Exception> {
-        let Literal::Ident(ident) = name else { unreachable!("non-identifiers cannot be passed to this function") };
+        let func = self.create_function(name, args, body);
+        self.env.set(func.name.clone(), Type::Func(func));
+        Ok(())
+    }
+
+    fn create_function(&self, name: Literal, args: Vec<Literal>, body: Vec<Item>) -> Func {
+        let Literal::Ident(ident) = name else {
+            unreachable!("non-identifiers cannot be passed to this function")
+        };
         let arg_idents = args
             .into_iter()
             .map(|arg| {
@@ -128,13 +139,32 @@ impl Interpreter {
                 }
             })
             .collect();
+        Func {
+            name: ident,
+            args: arg_idents,
+            body,
+            env: self.env.clone(),
+        }
+    }
+
+    fn interpret_class(&mut self, name: Literal, methods: Vec<Item>) -> Result<(), Exception> {
+        let Literal::Ident(ident) = name else {
+            unreachable!("non-identifiers cannot be passed to this function")
+        };
+        let mut method_map: HashMap<String, Func> = HashMap::default();
+        for method in methods {
+            if let Item::Function { name, args, body } = method {
+                let func = self.create_function(name, args, body);
+                method_map.insert(func.name.clone(), func);
+            } else {
+                unreachable!("non-functions cannot be passed as methods");
+            }
+        }
         self.env.set(
             ident.clone(),
-            Type::Func(Func {
+            Type::Class(Class {
                 name: ident,
-                args: arg_idents,
-                body,
-                env: self.env.clone(),
+                methods: method_map,
             }),
         );
         Ok(())
@@ -153,6 +183,12 @@ impl Interpreter {
             Expr::Logical { lhs, op, rhs } => self.interpret_logical(*lhs, op, *rhs),
             Expr::Group(e) => self.interpret_expr(*e),
             Expr::Call { func, args } => self.interpret_func_call(*func, args),
+            Expr::FieldGet { object, field } => self.interpret_field_get(*object, field),
+            Expr::FieldSet {
+                object,
+                field,
+                value,
+            } => self.interpret_field_set(*object, field, *value),
         }
     }
 
@@ -174,7 +210,7 @@ impl Interpreter {
             UnaryOp::Bang => return Ok(Type::Boolean(!self.to_bool(&lit))),
             UnaryOp::Increment => {
                 let Expr::Literal(Literal::Ident(ident)) = expr else {
-                    return Err(make(ErrorMsg::ExpectedIdent, lit.to_string()))
+                    return Err(make(ErrorMsg::ExpectedIdent, lit.to_string()));
                 };
                 if let Type::Number(n) = lit {
                     self.env.assign(ident, Type::Number(n + 1.0))?;
@@ -185,7 +221,7 @@ impl Interpreter {
             }
             UnaryOp::Decrement => {
                 let Expr::Literal(Literal::Ident(ident)) = expr else {
-                    return Err(make(ErrorMsg::ExpectedIdent, lit.to_string()))
+                    return Err(make(ErrorMsg::ExpectedIdent, lit.to_string()));
                 };
                 if let Type::Number(n) = lit {
                     self.env.assign(ident, Type::Number(n - 1.0))?;
@@ -245,8 +281,12 @@ impl Interpreter {
         // It might be possible to perform them across types, but
         // that gives the user a gun to shoot their foot with, and
         // is hence not implemented. No numero, no bueno ;)
-        let Type::Number(left_num) = left else { return Err(make(ErrorMsg::ExpectedNumber, left.to_string()))};
-        let Type::Number(right_num) = right else { return Err(make(ErrorMsg::ExpectedNumber, right.to_string()))};
+        let Type::Number(left_num) = left else {
+            return Err(make(ErrorMsg::ExpectedNumber, left.to_string()));
+        };
+        let Type::Number(right_num) = right else {
+            return Err(make(ErrorMsg::ExpectedNumber, right.to_string()));
+        };
 
         Ok(match op {
             BinOp::Plus => Type::Number(left_num + right_num),
@@ -271,6 +311,7 @@ impl Interpreter {
         let func: Box<dyn Callable> = match ty {
             Type::Func(f) => Box::new(f),
             Type::NativeFunc(f) => Box::new(f),
+            Type::Class(c) => Box::new(c),
             _ => return Err(make(ErrorMsg::InvalidCallExpr, ty.to_string())),
         };
         // Ensure the number of arguments matches the function definition
@@ -278,13 +319,13 @@ impl Interpreter {
             Ordering::Greater => {
                 return Err(make(
                     ErrorMsg::TooFewArgs,
-                    format!("{} arguments, expected {}", arg_exprs.len(), func.arity()),
+                    format!("{}, expected {}", arg_exprs.len(), func.arity()),
                 ))
             }
             Ordering::Less => {
                 return Err(make(
                     ErrorMsg::TooManyArgs,
-                    format!("{} arguments, expected {}", arg_exprs.len(), func.arity()),
+                    format!("{}, expected {}", arg_exprs.len(), func.arity()),
                 ))
             }
             _ => (),
@@ -327,6 +368,38 @@ impl Interpreter {
         }
 
         Ok(Type::Null)
+    }
+
+    fn interpret_field_get(&mut self, object: Expr, field: Literal) -> Result<Type, Exception> {
+        let ty = self.interpret_expr(object)?;
+        let Type::Instance(instance) = ty else {
+            return Err(make(ErrorMsg::InvalidObject, ty.to_string()));
+        };
+        let Literal::Ident(name) = field else {
+            unreachable!("object fields cannot be non-identifiers")
+        };
+        instance.get(name)
+    }
+
+    fn interpret_field_set(
+        &mut self,
+        object: Expr,
+        field: Literal,
+        expr: Expr,
+    ) -> Result<Type, Exception> {
+        let ty = self.interpret_expr(object.clone())?;
+        let Type::Instance(mut instance) = ty else {
+            return Err(make(ErrorMsg::InvalidObject, ty.to_string()));
+        };
+        let Literal::Ident(field_name) = field else {
+            unreachable!("object fields cannot be non-identifiers")
+        };
+        let value = self.interpret_expr(expr)?;
+        instance.set(field_name, value)?;
+        let Expr::Literal(Literal::Ident(instance_name)) = object else {
+            unreachable!("assignees cannot be non-identifiers")
+        };
+        self.env.assign(instance_name, Type::Instance(instance))
     }
 
     fn is_eq(&self, left: &Type, right: &Type) -> bool {
