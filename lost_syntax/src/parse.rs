@@ -249,7 +249,7 @@ impl<'a> Parser<'a> {
         // Consume the opening brace
         self.advance();
         while let Some(&t) = self.stream.peek() {
-            if matches!(t.kind, TokenKind::RBRACE | TokenKind::LBRACE) {
+            if matches!(t.kind, TokenKind::RBRACE) {
                 break;
             }
             items.push(self.parse_item()?);
