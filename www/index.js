@@ -15,6 +15,7 @@ const repl = {
 // Initialise
 // ----------------------------------------------------------------------------
 
+const world = new wasm.World();
 repl.elemSourceInput.addEventListener("change", onInputChange);
 repl.elemSourceInput.addEventListener("keyup", onInputKeyup);
 repl.elemHistory.querySelector("#loading-message").remove();
@@ -105,7 +106,7 @@ async function processInputQueue() {
     let ok = true;
     if (inputText) {
       try {
-        outputText = wasm.run_repl(inputText);
+        outputText = world.run(inputText);
       } catch (e) {
         outputText = `${e}`;
         ok = false;

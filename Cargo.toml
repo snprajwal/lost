@@ -1,5 +1,5 @@
 [workspace]
-members = ["lost_syntax", "lost_compile", "lost_playground"]
+members = ["lost_*"]
 resolver = "2"
 
 [profile.release]

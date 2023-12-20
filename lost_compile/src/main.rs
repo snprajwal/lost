@@ -1,8 +1,7 @@
 #[macro_use]
 extern crate log;
 
-use lost_compile::{error::Exception, interpret::Interpreter};
-use lost_syntax::{lex::Lexer, parse::Parser};
+use lost_compile::{interpret::Interpreter, run};
 use std::{
     env, fs,
     io::{self, Write},
@@ -60,27 +59,5 @@ fn run_repl() {
         if let Err(errs) = run(&line, &mut interpreter) {
             errs.iter().for_each(|e| eprintln!("{e}"));
         }
-    }
-}
-
-fn run(source: &str, interpreter: &mut Interpreter) -> Result<(), Vec<Exception>> {
-    let lexer = Lexer::new(source);
-    trace!("Lexing {source}");
-    let tokens = lexer.lex_all_sanitised().map_err(|e| {
-        e.into_iter()
-            .map(Exception::Error)
-            .collect::<Vec<Exception>>()
-    })?;
-    trace!("Parsing {tokens:#?}");
-    let parser = Parser::new(&tokens);
-    let root = parser.parse_all().map_err(|e| {
-        e.into_iter()
-            .map(Exception::Error)
-            .collect::<Vec<Exception>>()
-    })?;
-    trace!("Interpreting {root:#?}");
-    match interpreter.interpret_all(root.items) {
-        Ok(()) => Ok(()),
-        Err(e) => Err(vec![e]),
     }
 }
