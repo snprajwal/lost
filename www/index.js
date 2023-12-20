@@ -113,7 +113,7 @@ async function processInputQueue() {
       }
     }
 
-    if (outputText !== "") {
+    if (outputText) {
       updateHistoryEntry(repl.inputHistoryIndex, ok, outputText);
     }
     repl.inputQueue.shift();

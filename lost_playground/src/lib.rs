@@ -24,7 +24,10 @@ pub fn init() -> String {
         env!("CARGO_PKG_VERSION"),
         env::consts::OS,
         env::consts::ARCH,
-        env!("CARGO_PKG_AUTHORS"),
+        // Escape the chevrons for author email
+        env!("CARGO_PKG_AUTHORS")
+            .replace('<', "&lt;")
+            .replace('>', "&gt;"),
     )
 }
 
