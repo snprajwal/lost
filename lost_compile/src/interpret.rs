@@ -1,4 +1,4 @@
-use std::{cmp::Ordering, collections::HashMap};
+use std::{cell::RefCell, cmp::Ordering, collections::HashMap, rc::Rc};
 
 use crate::{
     environment::Env,
@@ -9,14 +9,12 @@ use lost_syntax::ast::{BinOp, Expr, Item, Literal, LogicalOp, UnaryOp};
 
 #[derive(Default, Debug)]
 pub struct Interpreter {
-    pub env: Env,
+    pub env: Rc<RefCell<Env>>,
 }
 
 impl Interpreter {
-    pub fn new(env: Option<Env>) -> Self {
-        Self {
-            env: env.unwrap_or_default(),
-        }
+    pub fn new() -> Self {
+        Self { env: Env::new() }
     }
 
     pub fn interpret_all(&mut self, items: Vec<Item>) -> Result<(), Exception> {
@@ -50,7 +48,11 @@ impl Interpreter {
                 return self.interpret_while_stmt(condition, *body)
             }
             Item::ReturnStmt(expr) => return self.interpret_return_stmt(expr),
-            Item::Block(items) => return self.interpret_block(items).map(|_| ()),
+            Item::Block(items) => {
+                return self
+                    .interpret_block(items, Env::with_parent(Rc::clone(&self.env)))
+                    .map(|_| ())
+            }
             Item::Function { name, args, body } => {
                 return self.interpret_function(name, args, body)
             }
@@ -67,7 +69,7 @@ impl Interpreter {
             Some(expr) => self.interpret_expr(expr)?,
             None => Type::Null,
         };
-        self.env.set(ident, value);
+        self.env.borrow_mut().set(ident, value);
         Ok(())
     }
 
@@ -99,19 +101,27 @@ impl Interpreter {
         Ok(())
     }
 
-    fn interpret_block(&mut self, items: Vec<Item>) -> Result<Type, Exception> {
-        // Create a new env with the current env as the parent
-        // and set it as the active env for the block scope
-        self.env = Env::with_parent(self.env.clone());
-        self.interpret_all(items)?;
-        // Restore the env
-        self.env = *self
-            .env
-            .clone()
-            .parent
-            .expect("parent env must be present for block envs");
+    fn interpret_block(
+        &mut self,
+        items: Vec<Item>,
+        env: Rc<RefCell<Env>>,
+    ) -> Result<Type, Exception> {
+        let old_env = Rc::clone(&self.env);
+        self.env = env;
+        let ret = self.interpret_all(items);
+        self.env = old_env;
 
-        Ok(Type::Null)
+        // If there is no error or return value, return null
+        let Err(exception) = ret else {
+            return Ok(Type::Null);
+        };
+        // If the exception is a return value, propagate
+        // it as an `Ok` value with the return type, else
+        // return the error itself
+        match exception {
+            Exception::Return(val) => Ok(val),
+            Exception::Error(_) => Err(exception),
+        }
     }
 
     fn interpret_function(
@@ -121,7 +131,9 @@ impl Interpreter {
         body: Vec<Item>,
     ) -> Result<(), Exception> {
         let func = self.create_function(name, args, body);
-        self.env.set(func.name.clone(), Type::Func(func));
+        self.env
+            .borrow_mut()
+            .set(func.name.clone(), Type::Func(func));
         Ok(())
     }
 
@@ -143,7 +155,7 @@ impl Interpreter {
             name: ident,
             args: arg_idents,
             body,
-            env: self.env.clone(),
+            env: Rc::clone(&self.env),
         }
     }
 
@@ -160,7 +172,7 @@ impl Interpreter {
                 unreachable!("non-functions cannot be passed as methods");
             }
         }
-        self.env.set(
+        self.env.borrow_mut().set(
             ident.clone(),
             Type::Class(Class {
                 name: ident,
@@ -177,7 +189,7 @@ impl Interpreter {
     fn interpret_expr(&mut self, expr: Expr) -> Result<Type, Exception> {
         match expr {
             Expr::Assignment { name, value } => self.interpret_assignment(name, *value),
-            Expr::Literal(l) => Ok(self.env.from_literal(l)?),
+            Expr::Literal(l) => Ok(self.env.borrow().from_literal(l)?),
             Expr::Unary { op, expr } => self.interpret_unary(op, *expr),
             Expr::Binary { lhs, op, rhs } => self.interpret_binary(*lhs, op, *rhs),
             Expr::Logical { lhs, op, rhs } => self.interpret_logical(*lhs, op, *rhs),
@@ -194,7 +206,7 @@ impl Interpreter {
 
     fn interpret_assignment(&mut self, name: Literal, expr: Expr) -> Result<Type, Exception> {
         let value = self.interpret_expr(expr)?;
-        self.env.assign(name.to_string(), value)
+        self.env.borrow_mut().assign(name.to_string(), value)
     }
 
     fn interpret_unary(&mut self, op: UnaryOp, expr: Expr) -> Result<Type, Exception> {
@@ -213,7 +225,7 @@ impl Interpreter {
                     return Err(make(ErrorMsg::ExpectedIdent, lit.to_string()));
                 };
                 if let Type::Number(n) = lit {
-                    self.env.assign(ident, Type::Number(n + 1.0))?;
+                    self.env.borrow_mut().assign(ident, Type::Number(n + 1.0))?;
                     Ok(Type::Number(n + 1.0))
                 } else {
                     Err(make(ErrorMsg::ExpectedNumber, lit.to_string()))
@@ -224,7 +236,7 @@ impl Interpreter {
                     return Err(make(ErrorMsg::ExpectedIdent, lit.to_string()));
                 };
                 if let Type::Number(n) = lit {
-                    self.env.assign(ident, Type::Number(n - 1.0))?;
+                    self.env.borrow_mut().assign(ident, Type::Number(n - 1.0))?;
                     Ok(Type::Number(n - 1.0))
                 } else {
                     Err(make(ErrorMsg::ExpectedNumber, lit.to_string()))
@@ -338,36 +350,13 @@ impl Interpreter {
         func.call(self, args)
     }
 
-    pub(crate) fn call_func(
-        &mut self,
-        func: Func,
-        args: Vec<Type>,
-        env: Env,
-    ) -> Result<Type, Exception> {
-        let old_env = self.env.clone();
-        let mut func_env = env;
-        // Add the function itself to the env
-        func_env.set(func.name.clone(), Type::Func(func.clone()));
+    pub(crate) fn call_func(&mut self, func: Func, args: Vec<Type>) -> Result<Type, Exception> {
+        let env = Env::with_parent(func.env);
         // Add the arguments to the function env
         for (ident, value) in func.args.into_iter().zip(args) {
-            func_env.set(ident, value);
+            env.borrow_mut().set(ident, value);
         }
-        self.env = Env::with_parent(func_env);
-
-        let res = self.interpret_all(func.body);
-        // Restore the env
-        self.env = old_env;
-        if let Err(exception) = res {
-            // If the exception is a return value, then propagate
-            // that as an `Ok` value with the return type, else
-            // return the error itself
-            match exception {
-                Exception::Return(val) => return Ok(val),
-                Exception::Error(_) => return Err(exception),
-            }
-        }
-
-        Ok(Type::Null)
+        self.interpret_block(func.body, env)
     }
 
     fn interpret_field_get(&mut self, object: Expr, field: Literal) -> Result<Type, Exception> {
@@ -399,7 +388,9 @@ impl Interpreter {
         let Expr::Literal(Literal::Ident(instance_name)) = object else {
             unreachable!("assignees cannot be non-identifiers")
         };
-        self.env.assign(instance_name, Type::Instance(instance))
+        self.env
+            .borrow_mut()
+            .assign(instance_name, Type::Instance(instance))
     }
 
     fn is_eq(&self, left: &Type, right: &Type) -> bool {
@@ -417,17 +408,20 @@ mod tests {
 
     #[test]
     fn let_stmt() {
-        let mut interpreter = Interpreter::new(None);
+        let mut interpreter = Interpreter::new();
         let var = "x".to_string();
         let name = Literal::Ident(var.clone());
         let init = Some(Expr::Literal(Literal::Number(5.0)));
         assert!(interpreter.interpret_let_stmt(name, init).is_ok());
-        assert_eq!(interpreter.env.get(var).unwrap(), Type::Number(5.0));
+        assert_eq!(
+            interpreter.env.borrow().get(var).unwrap(),
+            Type::Number(5.0)
+        );
     }
 
     #[test]
     fn if_stmt() {
-        let mut interpreter = Interpreter::new(None);
+        let mut interpreter = Interpreter::new();
         let condition = Expr::Literal(Literal::Boolean(true));
         let if_item = Item::ExprStmt(Expr::Literal(Literal::Str("hello".to_string())));
         let else_item = Some(Item::ExprStmt(Expr::Literal(Literal::Str(
@@ -440,7 +434,7 @@ mod tests {
 
     #[test]
     fn while_stmt() {
-        let mut interpreter = Interpreter::new(None);
+        let mut interpreter = Interpreter::new();
         let condition = Expr::Literal(Literal::Boolean(false));
         let body = Item::ExprStmt(Expr::Literal(Literal::Str("hello".to_string())));
         assert!(interpreter.interpret_while_stmt(condition, body).is_ok());
@@ -448,7 +442,7 @@ mod tests {
 
     #[test]
     fn block() {
-        let mut interpreter = Interpreter::new(None);
+        let mut interpreter = Interpreter::new();
         let items = vec![
             Item::LetStmt {
                 name: Literal::Ident("x".to_string()),
@@ -458,12 +452,14 @@ mod tests {
                 "x".to_string(),
             )))]),
         ];
-        assert!(interpreter.interpret_block(items).is_ok());
+        assert!(interpreter
+            .interpret_block(items, Env::with_parent(Rc::clone(&interpreter.env)))
+            .is_ok());
     }
 
     #[test]
     fn expr() {
-        let mut interpreter = Interpreter::new(None);
+        let mut interpreter = Interpreter::new();
 
         // Number literal
         let result = interpreter.interpret_expr(Expr::Literal(Literal::Number(10.5)));
@@ -478,7 +474,10 @@ mod tests {
         assert_eq!(result.unwrap(), Type::Str("hello".to_string()));
 
         // Identifier
-        interpreter.env.set("x".to_string(), Type::Number(5.0));
+        interpreter
+            .env
+            .borrow_mut()
+            .set("x".to_string(), Type::Number(5.0));
         let result = interpreter.interpret_expr(Expr::Literal(Literal::Ident("x".to_string())));
         assert_eq!(result.unwrap(), Type::Number(5.0));
 

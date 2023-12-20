@@ -1,6 +1,8 @@
 use std::{
+    cell::RefCell,
     collections::HashMap,
     fmt::{Debug, Display},
+    rc::Rc,
 };
 
 use lost_syntax::ast::Item;
@@ -48,7 +50,7 @@ pub struct Func {
     pub name: String,
     pub args: Vec<String>,
     pub body: Vec<Item>,
-    pub env: Env,
+    pub env: Rc<RefCell<Env>>,
 }
 
 impl Display for Func {
@@ -62,7 +64,7 @@ impl Callable for Func {
         self.args.len()
     }
     fn call(&self, interpreter: &mut Interpreter, args: Vec<Type>) -> Result<Type, Exception> {
-        interpreter.call_func(self.clone(), args, self.env.clone())
+        interpreter.call_func(self.clone(), args)
     }
 }
 
@@ -152,6 +154,7 @@ impl Instance {
             let mut func = value.clone();
             func.env = Env::with_parent(func.env);
             func.env
+                .borrow_mut()
                 .set("this".to_string(), Type::Instance(self.clone()));
             return Ok(Type::Func(func));
         }

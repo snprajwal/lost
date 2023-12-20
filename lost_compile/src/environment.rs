@@ -1,25 +1,32 @@
-use std::collections::HashMap;
+use std::{cell::RefCell, collections::HashMap, rc::Rc};
 
 use log::debug;
 use lost_syntax::ast::Literal;
 
 use crate::{
     error::{make, ErrorMsg, Exception},
+    stdlib,
     types::Type,
 };
 
 #[derive(Debug, Default, Clone, PartialEq)]
 pub struct Env {
     values: HashMap<String, Type>,
-    pub parent: Option<Box<Env>>,
+    pub parent: Option<Rc<RefCell<Env>>>,
 }
 
 impl Env {
-    pub fn with_parent(parent: Env) -> Self {
-        Self {
-            parent: Some(Box::new(parent)),
+    pub fn new() -> Rc<RefCell<Self>> {
+        let mut env = Self::default();
+        stdlib::init_io(&mut env);
+        Rc::new(RefCell::new(env))
+    }
+
+    pub fn with_parent(parent: Rc<RefCell<Env>>) -> Rc<RefCell<Self>> {
+        Rc::new(RefCell::new(Self {
+            parent: Some(parent),
             ..Default::default()
-        }
+        }))
     }
 
     pub fn set(&mut self, name: String, value: Type) -> Type {
@@ -34,7 +41,8 @@ impl Env {
             return Ok(value.clone());
         }
         if let Some(parent) = &self.parent {
-            return parent.get(name);
+            debug!("Get {name} from parent");
+            return parent.borrow().get(name);
         }
         Err(make(ErrorMsg::UndefinedVar, name))
     }
@@ -45,7 +53,8 @@ impl Env {
             return Ok(self.set(name, value));
         }
         if let Some(parent) = &mut self.parent {
-            return parent.assign(name, value);
+            debug!("Assign {name} in parent");
+            return parent.borrow_mut().assign(name, value);
         }
         Err(make(ErrorMsg::UndefinedVar, name))
     }

@@ -1,5 +1,6 @@
 [workspace]
 members = ["lost_syntax", "lost_compile", "lost_playground"]
+resolver = "2"
 
 [profile.release]
 lto = true
