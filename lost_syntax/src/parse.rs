@@ -452,40 +452,39 @@ impl<'a> Parser<'a> {
     fn parse_func_call(&mut self) -> Result<Expr, Error> {
         let mut expr = self.parse_primary()?;
         loop {
-            if let Some(t) = self.stream.peek() {
-                match t.kind {
-                    TokenKind::LPAREN => {
-                        // Consume the opening parenthesis
-                        self.advance();
-                        let mut args = vec![];
-                        if self.advance_if(|t| t.kind == TokenKind::RPAREN).is_none() {
-                            loop {
-                                args.push(self.parse_expr()?);
-                                if self.advance_if(|t| t.kind == TokenKind::COMMA).is_none() {
-                                    break;
-                                }
+            let Some(t) = self.stream.peek() else { break };
+            match t.kind {
+                TokenKind::LPAREN => {
+                    // Consume the opening parenthesis
+                    self.advance();
+                    let mut args = vec![];
+                    if self.advance_if(|t| t.kind == TokenKind::RPAREN).is_none() {
+                        loop {
+                            args.push(self.parse_expr()?);
+                            if self.advance_if(|t| t.kind == TokenKind::COMMA).is_none() {
+                                break;
                             }
-                            // Consume the closing parenthesis
-                            self.advance_or_err(TokenKind::RPAREN, ErrorMsg::MissingClosingParen)?;
                         }
-                        expr = Expr::Call {
-                            func: Box::new(expr),
-                            args,
-                        };
+                        // Consume the closing parenthesis
+                        self.advance_or_err(TokenKind::RPAREN, ErrorMsg::MissingClosingParen)?;
                     }
-                    TokenKind::DOT => {
-                        // Consume the dot
-                        self.advance();
-                        expr = Expr::FieldGet {
-                            object: Box::new(expr),
-                            field: Literal::Ident(
-                                self.advance_or_err(TokenKind::IDENT, ErrorMsg::InvalidIdent)?
-                                    .lexeme,
-                            ),
-                        }
-                    }
-                    _ => break,
+                    expr = Expr::Call {
+                        func: Box::new(expr),
+                        args,
+                    };
                 }
+                TokenKind::DOT => {
+                    // Consume the dot
+                    self.advance();
+                    expr = Expr::FieldGet {
+                        object: Box::new(expr),
+                        field: Literal::Ident(
+                            self.advance_or_err(TokenKind::IDENT, ErrorMsg::InvalidIdent)?
+                                .lexeme,
+                        ),
+                    }
+                }
+                _ => break,
             }
         }
 
