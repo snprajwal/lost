@@ -28,6 +28,7 @@ pub enum ErrorMsg {
     InvalidObject,
     TooManyArgs,
     TooFewArgs,
+    GetConstructor,
     // Memory errors
     UndefinedVar,
     UndefinedMember,
@@ -36,20 +37,21 @@ pub enum ErrorMsg {
 impl Display for ErrorMsg {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str(match self {
-            Self::ExpectedNumber => "expected numeric operand",
-            Self::ExpectedNumOrStr => "expected both operands to be numeric or string",
-            Self::ExpectedIdent => "expected identifier",
-            Self::InvalidStrOp => "invalid operation on strings",
-            Self::InvalidCallExpr => "cannot call this function",
-            Self::InvalidObject => "cannot use this as an object",
+            Self::ExpectedNumber => "expected numeric operand, found",
+            Self::ExpectedNumOrStr => "expected both operands to be numeric or string, found",
+            Self::ExpectedIdent => "expected identifier, found",
+            Self::InvalidStrOp => "invalid string operation",
+            Self::InvalidCallExpr => "cannot call non-function value",
+            Self::InvalidObject => "invalid object, found",
             Self::TooManyArgs => "too many arguments in function call",
             Self::TooFewArgs => "too few arguments in function call",
+            Self::GetConstructor => "illegal to get constructor of class",
             Self::UndefinedVar => "undefined variable",
-            Self::UndefinedMember => "undefined member",
+            Self::UndefinedMember => "undefined object member",
         })
     }
 }
 
 pub fn make(msg: ErrorMsg, val: String) -> Exception {
-    Exception::Error(format!("Runtime error: {}, found {}", msg, val))
+    Exception::Error(format!("Runtime error: {} {}", msg, val))
 }

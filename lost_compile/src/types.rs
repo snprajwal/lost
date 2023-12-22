@@ -123,13 +123,27 @@ impl Display for Class {
 
 impl Callable for Class {
     fn arity(&self) -> usize {
-        0
+        if let Some(init) = self.methods.get(&self.name) {
+            init.arity()
+        } else {
+            0
+        }
     }
-    fn call(&self, _: &mut Interpreter, _: Vec<Type>) -> Result<Type, Exception> {
-        Ok(Type::Instance(Instance {
+    fn call(&self, interpreter: &mut Interpreter, args: Vec<Type>) -> Result<Type, Exception> {
+        let instance = Type::Instance(Instance {
             fields: HashMap::default(),
             class: self.clone(),
-        }))
+        });
+        // The constructor has the same name as the class.
+        // If it is in the list of defined methods, run it.
+        if let Some(mut init) = self.methods.get(&self.name).cloned() {
+            init.env = Env::with_parent(init.env);
+            init.env
+                .borrow_mut()
+                .set("this".to_string(), instance.clone());
+            init.call(interpreter, args)?;
+        }
+        Ok(instance)
     }
 }
 
@@ -150,8 +164,11 @@ impl Instance {
         if let Some(value) = self.fields.get(&member) {
             return Ok(value.clone());
         }
-        if let Some(value) = self.class.methods.get(&member) {
-            let mut func = value.clone();
+        // The constructor must be fetched or explicitly called
+        if self.class.name == member {
+            return Err(make(ErrorMsg::GetConstructor, member));
+        }
+        if let Some(mut func) = self.class.methods.get(&member).cloned() {
             func.env = Env::with_parent(func.env);
             func.env
                 .borrow_mut()

@@ -331,13 +331,13 @@ impl Interpreter {
             Ordering::Greater => {
                 return Err(make(
                     ErrorMsg::TooFewArgs,
-                    format!("{}, expected {}", arg_exprs.len(), func.arity()),
+                    format!("(expected {}, got {})", func.arity(), arg_exprs.len()),
                 ))
             }
             Ordering::Less => {
                 return Err(make(
                     ErrorMsg::TooManyArgs,
-                    format!("{}, expected {}", arg_exprs.len(), func.arity()),
+                    format!("(expected {}, got {})", func.arity(), arg_exprs.len()),
                 ))
             }
             _ => (),
