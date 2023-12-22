@@ -55,11 +55,11 @@
 /******/ 		"../lost_playground/pkg/lost_playground_bg.wasm": function() {
 /******/ 			return {
 /******/ 				"./lost_playground_bg.js": {
-/******/ 					"__wbindgen_object_drop_ref": function(p0i32) {
-/******/ 						return installedModules["../lost_playground/pkg/lost_playground_bg.js"].exports["__wbindgen_object_drop_ref"](p0i32);
-/******/ 					},
 /******/ 					"__wbindgen_string_new": function(p0i32,p1i32) {
 /******/ 						return installedModules["../lost_playground/pkg/lost_playground_bg.js"].exports["__wbindgen_string_new"](p0i32,p1i32);
+/******/ 					},
+/******/ 					"__wbindgen_object_drop_ref": function(p0i32) {
+/******/ 						return installedModules["../lost_playground/pkg/lost_playground_bg.js"].exports["__wbindgen_object_drop_ref"](p0i32);
 /******/ 					},
 /******/ 					"__wbg_new_abda76e883ba8a5f": function() {
 /******/ 						return installedModules["../lost_playground/pkg/lost_playground_bg.js"].exports["__wbg_new_abda76e883ba8a5f"]();
@@ -174,7 +174,7 @@
 /******/ 				promises.push(installedWasmModuleData);
 /******/ 			else {
 /******/ 				var importObject = wasmImportObjects[wasmModuleId]();
-/******/ 				var req = fetch(__webpack_require__.p + "" + {"../lost_playground/pkg/lost_playground_bg.wasm":"64fe9247e12b46ccf3ed"}[wasmModuleId] + ".module.wasm");
+/******/ 				var req = fetch(__webpack_require__.p + "" + {"../lost_playground/pkg/lost_playground_bg.wasm":"16b30add2323941d9b42"}[wasmModuleId] + ".module.wasm");
 /******/ 				var promise;
 /******/ 				if(importObject instanceof Promise && typeof WebAssembly.compileStreaming === 'function') {
 /******/ 					promise = Promise.all([WebAssembly.compileStreaming(req), importObject]).then(function(items) {
