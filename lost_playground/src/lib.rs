@@ -92,13 +92,26 @@ fn init_io(env: &mut Env) {
             name: "print".to_string(),
             args: vec!["arg".to_string()],
             body: |interpreter, args| {
-                let arg = args.first().expect("argument not present");
+                let Type::Str(output) =
+                    interpreter.env.borrow().get(REPL_OUTPUT_VAR.to_string())?
+                else {
+                    unreachable!("The output value cannot be a non-string type");
+                };
                 interpreter
                     .env
                     .borrow_mut()
-                    .assign(REPL_OUTPUT_VAR.to_string(), Type::Str(arg.to_string()))
+                    .assign(
+                        REPL_OUTPUT_VAR.to_string(),
+                        // The string must be appended to any
+                        // output that has not been written yet
+                        Type::Str(if output.is_empty() {
+                            args[0].to_string()
+                        } else {
+                            output + "\n" + &args[0].to_string()
+                        }),
+                    )
                     .expect("no output variable present");
-                Ok(Type::Number(arg.to_string().len() as f64))
+                Ok(Type::Null)
             },
         }),
     );
