@@ -105,23 +105,12 @@ impl Interpreter {
         &mut self,
         items: Vec<Item>,
         env: Rc<RefCell<Env>>,
-    ) -> Result<Type, Exception> {
+    ) -> Result<(), Exception> {
         let old_env = Rc::clone(&self.env);
         self.env = env;
         let ret = self.interpret_all(items);
         self.env = old_env;
-
-        // If there is no error or return value, return null
-        let Err(exception) = ret else {
-            return Ok(Type::Null);
-        };
-        // If the exception is a return value, propagate
-        // it as an `Ok` value with the return type, else
-        // return the error itself
-        match exception {
-            Exception::Return(val) => Ok(val),
-            Exception::Error(_) => Err(exception),
-        }
+        ret
     }
 
     fn interpret_function(
@@ -356,7 +345,17 @@ impl Interpreter {
         for (ident, value) in func.args.into_iter().zip(args) {
             env.borrow_mut().set(ident, value);
         }
-        self.interpret_block(func.body, env)
+        // If there is no error or return value, return null
+        let Err(exception) = self.interpret_block(func.body, env) else {
+            return Ok(Type::Null);
+        };
+        // If the exception is a return value, propagate
+        // it as an `Ok` value with the return type, else
+        // return the error itself
+        match exception {
+            Exception::Return(val) => Ok(val),
+            Exception::Error(_) => Err(exception),
+        }
     }
 
     fn interpret_field_get(&mut self, object: Expr, field: Literal) -> Result<Type, Exception> {
