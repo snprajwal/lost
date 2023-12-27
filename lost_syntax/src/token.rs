@@ -1,6 +1,6 @@
 use std::{fmt::Display, ops::AddAssign};
 
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 pub struct TextRange {
     pub start: usize,
     pub end: usize,

@@ -1,7 +1,7 @@
 use std::{iter::Peekable, slice::Iter};
 
 use crate::{
-    ast::{self, Expr, Item, Literal, Source},
+    ast::{self, Expr, Ident, Item, Literal, Source},
     error::{Error, ErrorMsg},
     token::{Token, TokenKind},
 };
@@ -18,11 +18,11 @@ impl<'a> Parser<'a> {
         }
     }
 
-    pub fn parse_all(mut self) -> Result<Source, Vec<Error>> {
+    pub fn parse(mut self) -> Result<Source, Vec<Error>> {
         let mut items: Vec<Item> = Vec::default();
         let mut errors: Vec<Error> = Vec::default();
         while self.stream.peek().is_some() {
-            match self.parse() {
+            match self.parse_item() {
                 Ok(stmt) => items.push(stmt),
                 Err(e) => {
                     errors.push(e);
@@ -32,10 +32,6 @@ impl<'a> Parser<'a> {
         }
 
         errors.is_empty().then(|| Source { items }).ok_or(errors)
-    }
-
-    pub fn parse(&mut self) -> Result<Item, Error> {
-        self.parse_item()
     }
 
     pub fn parse_item(&mut self) -> Result<Item, Error> {
@@ -70,7 +66,10 @@ impl<'a> Parser<'a> {
         };
 
         Ok(Item::LetStmt {
-            name: Literal::Ident(name.lexeme.clone()),
+            ident: Ident {
+                name: name.lexeme.clone(),
+                range: name.range,
+            },
             init,
         })
     }
@@ -170,10 +169,11 @@ impl<'a> Parser<'a> {
     fn parse_class(&mut self) -> Result<Item, Error> {
         // Consume the `class` keyword
         self.advance();
-        let name = Literal::Ident(
-            self.advance_or_err(TokenKind::IDENT, ErrorMsg::InvalidIdent)?
-                .lexeme,
-        );
+        let name = self.advance_or_err(TokenKind::IDENT, ErrorMsg::InvalidIdent)?;
+        let ident = Ident {
+            name: name.lexeme.clone(),
+            range: name.range,
+        };
         self.advance_or_err(TokenKind::LBRACE, ErrorMsg::MissingOpeningBrace)?;
         let mut methods = vec![];
         while self
@@ -186,16 +186,17 @@ impl<'a> Parser<'a> {
         }
         self.advance_or_err(TokenKind::RBRACE, ErrorMsg::MissingClosingBrace)?;
 
-        Ok(Item::Class { name, methods })
+        Ok(Item::Class { ident, methods })
     }
 
     fn parse_function(&mut self) -> Result<Item, Error> {
         // Consume the `fn` keyword
         self.advance();
-        let name = Literal::Ident(
-            self.advance_or_err(TokenKind::IDENT, ErrorMsg::InvalidIdent)?
-                .lexeme,
-        );
+        let name = self.advance_or_err(TokenKind::IDENT, ErrorMsg::InvalidIdent)?;
+        let ident = Ident {
+            name: name.lexeme.clone(),
+            range: name.range,
+        };
         self.advance_or_err(TokenKind::LPAREN, ErrorMsg::MissingOpeningParen)?;
         let mut args = vec![];
         while self
@@ -204,10 +205,11 @@ impl<'a> Parser<'a> {
             .filter(|t| t.kind == TokenKind::RPAREN)
             .is_none()
         {
-            args.push(Literal::Ident(
-                self.advance_or_err(TokenKind::IDENT, ErrorMsg::InvalidIdent)?
-                    .lexeme,
-            ));
+            let name = self.advance_or_err(TokenKind::IDENT, ErrorMsg::InvalidIdent)?;
+            args.push(Ident {
+                name: name.lexeme.clone(),
+                range: name.range,
+            });
             if self.advance_if(|t| t.kind == TokenKind::COMMA).is_none() {
                 break;
             }
@@ -222,7 +224,7 @@ impl<'a> Parser<'a> {
             unreachable!("parsing a block must return a body")
         };
 
-        Ok(Item::Function { name, args, body })
+        Ok(Item::Function { ident, args, body })
     }
 
     fn parse_return(&mut self) -> Result<Item, Error> {
@@ -289,26 +291,25 @@ impl<'a> Parser<'a> {
         };
         let rhs = self.parse_assignment()?;
         match lhs {
-            Expr::Literal(lit @ Literal::Ident(_)) => Ok(Expr::Assignment {
-                name: lit,
+            Expr::Ident(ident) => Ok(Expr::Assignment {
+                name: ident,
                 value: Box::new(rhs),
             }),
             Expr::FieldGet { object, field } => {
-                if matches!(field, Literal::Ident(_)) {
-                    Ok(Expr::FieldSet {
-                        object,
-                        field,
-                        value: Box::new(rhs),
-                    })
-                } else {
-                    // The error is manually generated as there is
-                    // no single token for the lvalue identifier
-                    Err(format!(
-                        "Parse error at line {}: {}",
-                        eq.line + 1,
-                        ErrorMsg::InvalidField,
-                    ))
-                }
+                Ok(Expr::FieldSet {
+                    object,
+                    field,
+                    value: Box::new(rhs),
+                })
+                // } else {
+                //     // The error is manually generated as there is
+                //     // no single token for the lvalue identifier
+                //     Err(format!(
+                //         "Parse error at line {}: {}",
+                //         eq.line + 1,
+                //         ErrorMsg::InvalidField,
+                //     ))
+                // }
             }
             _ => {
                 // The error is manually generated as there is
@@ -476,12 +477,13 @@ impl<'a> Parser<'a> {
                 TokenKind::DOT => {
                     // Consume the dot
                     self.advance();
+                    let name = self.advance_or_err(TokenKind::IDENT, ErrorMsg::InvalidIdent)?;
                     expr = Expr::FieldGet {
                         object: Box::new(expr),
-                        field: Literal::Ident(
-                            self.advance_or_err(TokenKind::IDENT, ErrorMsg::InvalidIdent)?
-                                .lexeme,
-                        ),
+                        field: Ident {
+                            name: name.lexeme.clone(),
+                            range: name.range,
+                        },
                     }
                 }
                 _ => break,
@@ -502,7 +504,12 @@ impl<'a> Parser<'a> {
                 }
                 TokenKind::STRING => Literal::Str(t.lexeme.clone()),
                 TokenKind::LPAREN => return self.parse_group(),
-                TokenKind::IDENT | TokenKind::THIS => Literal::Ident(t.lexeme.clone()),
+                TokenKind::IDENT | TokenKind::THIS => {
+                    return Ok(Expr::Ident(Ident {
+                        name: t.lexeme.clone(),
+                        range: t.range,
+                    }))
+                }
                 _ => return Err(Self::error(t, ErrorMsg::UnexpectedToken)),
             },
             None => return Err(format!("Parse error: {}", ErrorMsg::EndOfStream)),
@@ -592,18 +599,18 @@ impl<'a> Parser<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::lex::Lexer;
+    use crate::{lex::Lexer, token::TextRange};
 
     fn parse_test(input: &str, expected: Source) {
         let tokens = Lexer::new(input).lex_all_sanitised().unwrap();
-        let source = Parser::new(&tokens).parse_all().unwrap();
+        let source = Parser::new(&tokens).parse().unwrap();
         assert_eq!(source, expected);
     }
 
     fn parse_err_test(input: &str, expected: &str) {
         let tokens = Lexer::new(input).lex_all_sanitised().unwrap();
         let err = Parser::new(&tokens)
-            .parse_all()
+            .parse()
             .map_err(|v| v.first().unwrap().to_owned())
             .unwrap_err();
         assert_eq!(err, expected);
@@ -615,7 +622,10 @@ mod tests {
             "let x = 42;",
             Source {
                 items: vec![Item::LetStmt {
-                    name: Literal::Ident("x".to_owned()),
+                    ident: Ident {
+                        name: "x".to_owned(),
+                        range: TextRange { start: 0, end: 0 },
+                    },
                     init: Some(Expr::Literal(Literal::Number(42.0))),
                 }],
             },
@@ -673,23 +683,36 @@ mod tests {
             Source {
                 items: vec![Item::Block(vec![
                     Item::LetStmt {
-                        name: Literal::Ident(var.clone()),
+                        ident: Ident {
+                            name: var.clone(),
+                            range: TextRange { start: 0, end: 0 },
+                        },
                         init: Some(Expr::Literal(Literal::Number(0.0))),
                     },
                     Item::WhileStmt {
                         condition: Expr::Binary {
-                            lhs: Box::new(Expr::Literal(Literal::Ident(var.clone()))),
+                            lhs: Box::new(Expr::Ident(Ident {
+                                name: var.clone(),
+                                range: TextRange { start: 0, end: 0 },
+                            })),
                             op: ast::BinOp::Less,
                             rhs: Box::new(Expr::Literal(Literal::Number(5.0))),
                         },
                         body: Box::new(Item::Block(vec![
-                            Item::Block(vec![Item::ExprStmt(Expr::Literal(Literal::Ident(
-                                var.clone(),
-                            )))]),
+                            Item::Block(vec![Item::ExprStmt(Expr::Ident(Ident {
+                                name: var.clone(),
+                                range: TextRange { start: 0, end: 0 },
+                            }))]),
                             Item::ExprStmt(Expr::Assignment {
-                                name: Literal::Ident(var.clone()),
+                                name: Ident {
+                                    name: var.clone(),
+                                    range: TextRange { start: 0, end: 0 },
+                                },
                                 value: Box::new(Expr::Binary {
-                                    lhs: Box::new(Expr::Literal(Literal::Ident(var.clone()))),
+                                    lhs: Box::new(Expr::Ident(Ident {
+                                        name: var.clone(),
+                                        range: TextRange { start: 0, end: 0 },
+                                    })),
                                     op: ast::BinOp::Plus,
                                     rhs: Box::new(Expr::Literal(Literal::Number(1.0))),
                                 }),
@@ -708,11 +731,17 @@ mod tests {
             Source {
                 items: vec![Item::Block(vec![
                     Item::LetStmt {
-                        name: Literal::Ident("x".to_owned()),
+                        ident: Ident {
+                            name: "x".to_owned(),
+                            range: TextRange { start: 0, end: 0 },
+                        },
                         init: Some(Expr::Literal(Literal::Number(1.0))),
                     },
                     Item::LetStmt {
-                        name: Literal::Ident("y".to_owned()),
+                        ident: Ident {
+                            name: "y".to_owned(),
+                            range: TextRange { start: 0, end: 0 },
+                        },
                         init: Some(Expr::Literal(Literal::Number(2.0))),
                     },
                 ])],

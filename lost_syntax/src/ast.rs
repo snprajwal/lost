@@ -1,8 +1,8 @@
-use std::fmt::Display;
+use std::{fmt::Display, hash::Hash};
 
-use crate::token::TokenKind;
+use crate::token::{TextRange, TokenKind};
 
-#[derive(Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct Source {
     pub items: Vec<Item>,
 }
@@ -10,16 +10,16 @@ pub struct Source {
 #[derive(Clone, Debug, PartialEq)]
 pub enum Item {
     Class {
-        name: Literal,
+        ident: Ident,
         methods: Vec<Item>,
     },
     Function {
-        name: Literal,
-        args: Vec<Literal>,
+        ident: Ident,
+        args: Vec<Ident>,
         body: Vec<Item>,
     },
     LetStmt {
-        name: Literal,
+        ident: Ident,
         init: Option<Expr>,
     },
     ExprStmt(Expr),
@@ -127,9 +127,18 @@ impl LogicalOp {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct Ident {
+    pub name: String,
+    // Identifiers in different scopes may have the same name,
+    // but are not identical since they refer to different variables.
+    // The text range ensures that there is no collision between
+    // these identfiers during resolution.
+    pub range: TextRange,
+}
+
 #[derive(Clone, Debug, PartialEq)]
 pub enum Literal {
-    Ident(String),
     Number(f64),
     Str(String),
     Boolean(bool),
@@ -139,7 +148,6 @@ pub enum Literal {
 impl Display for Literal {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str(&match self {
-            Self::Ident(name) => name.to_owned(),
             Self::Number(n) => n.to_string(),
             Self::Str(s) => s.to_owned(),
             Self::Boolean(b) => b.to_string(),
@@ -151,9 +159,10 @@ impl Display for Literal {
 #[derive(Clone, Debug, PartialEq)]
 pub enum Expr {
     Assignment {
-        name: Literal,
+        name: Ident,
         value: Box<Expr>,
     },
+    Ident(Ident),
     Literal(Literal),
     Unary {
         op: UnaryOp,
@@ -176,11 +185,11 @@ pub enum Expr {
     },
     FieldGet {
         object: Box<Expr>,
-        field: Literal,
+        field: Ident,
     },
     FieldSet {
         object: Box<Expr>,
-        field: Literal,
+        field: Ident,
         value: Box<Expr>,
     },
 }

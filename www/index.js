@@ -32,7 +32,7 @@ function init_repl() {
   repl.elemHistory.scrollTop = repl.elemHistory.scrollHeight;
   // Update the input history with a blank line
   repl.inputHistory.push("")
-  updateHistoryEntry(repl.inputHistoryIndex, true, wasm.init())
+  updateHistoryEntry(repl.inputHistoryIndex, true, wasm.init_repl())
 }
 
 // ----------------------------------------------------------------------------

@@ -1,12 +1,7 @@
-use lost_compile::{
-    environment::Env,
-    interpret::Interpreter,
-    run,
-    types::{
-        self,
-        Type::{self, NativeFunc},
-    },
-};
+mod stdlib;
+
+use crate::stdlib::init;
+use lost_compile::{environment::Env, interpret::Interpreter, resolve::Resolver, run, types::Type};
 use std::env;
 use wasm_bindgen::prelude::*;
 
@@ -15,7 +10,7 @@ use wasm_bindgen::prelude::*;
 static ALLOC: wee_alloc::WeeAlloc = wee_alloc::WeeAlloc::INIT;
 
 #[wasm_bindgen]
-pub fn init() -> String {
+pub fn init_repl() -> String {
     #[cfg(feature = "console_error_panic_hook")]
     console_error_panic_hook::set_once();
 
@@ -34,30 +29,36 @@ pub fn init() -> String {
 #[wasm_bindgen]
 #[derive(Default)]
 pub struct World {
+    resolver: Resolver,
     interpreter: Interpreter,
 }
 
-const REPL_OUTPUT_VAR: &str = "REPL_OUTPUT";
+pub(crate) const REPL_OUTPUT_VAR: &str = "REPL_OUTPUT";
 
 #[wasm_bindgen]
 impl World {
     #[wasm_bindgen(constructor)]
     pub fn new() -> Self {
-        let world = Self::default();
         let mut env = Env::default();
         // Initialise output variable. This is a hack
         // to print to JS since stdout itself can't be
         // captured and piped into a JS value.
         env.set(REPL_OUTPUT_VAR.to_string(), Type::Str(String::default()));
         // Add stdlib functions
-        init_io(&mut env);
-        world.interpreter.env.replace(env);
-        world
+        init(&mut env);
+
+        let interpreter = Interpreter::default();
+        interpreter.env.replace(env);
+
+        World {
+            resolver: Resolver::new(),
+            interpreter,
+        }
     }
 
     pub fn run(&mut self, src: &str) -> Result<String, String> {
         clear_output(&self.interpreter);
-        match run(src, &mut self.interpreter) {
+        match run(src, &mut self.resolver, &mut self.interpreter) {
             Ok(()) => Ok(self
                 .interpreter
                 .env
@@ -78,41 +79,6 @@ fn clear_output(interpreter: &Interpreter) {
     interpreter
         .env
         .borrow_mut()
-        .assign(REPL_OUTPUT_VAR.to_string(), Type::Str(String::default()))
+        .assign_at_depth(REPL_OUTPUT_VAR.to_string(), Type::Str(String::default()), 0)
         .expect("no output variable present");
-}
-
-/// Override the default init_io from stdlib
-/// since `println!` cannot be used with wasm
-fn init_io(env: &mut Env) {
-    // print(args)
-    env.set(
-        "print".to_string(),
-        NativeFunc(types::NativeFunc {
-            name: "print".to_string(),
-            args: vec!["arg".to_string()],
-            body: |interpreter, args| {
-                let Type::Str(output) =
-                    interpreter.env.borrow().get(REPL_OUTPUT_VAR.to_string())?
-                else {
-                    unreachable!("The output value cannot be a non-string type");
-                };
-                interpreter
-                    .env
-                    .borrow_mut()
-                    .assign(
-                        REPL_OUTPUT_VAR.to_string(),
-                        // The string must be appended to any
-                        // output that has not been written yet
-                        Type::Str(if output.is_empty() {
-                            args[0].to_string()
-                        } else {
-                            output + "\n" + &args[0].to_string()
-                        }),
-                    )
-                    .expect("no output variable present");
-                Ok(Type::Null)
-            },
-        }),
-    );
 }

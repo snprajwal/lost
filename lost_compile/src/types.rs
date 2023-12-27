@@ -9,7 +9,7 @@ use lost_syntax::ast::Item;
 
 use crate::{
     environment::Env,
-    error::{make, ErrorMsg, Exception},
+    error::{runtime_error, ErrorMsg, Exception},
     interpret::Interpreter,
 };
 
@@ -64,7 +64,7 @@ impl Callable for Func {
         self.args.len()
     }
     fn call(&self, interpreter: &mut Interpreter, args: Vec<Type>) -> Result<Type, Exception> {
-        interpreter.call_func(self.clone(), args)
+        interpreter.call(self.clone(), args)
     }
 }
 
@@ -166,7 +166,7 @@ impl Instance {
         }
         // The constructor must be fetched or explicitly called
         if self.class.name == member {
-            return Err(make(ErrorMsg::GetConstructor, member));
+            return Err(runtime_error(ErrorMsg::GetConstructor, member));
         }
         if let Some(mut func) = self.class.methods.get(&member).cloned() {
             func.env = Env::with_parent(func.env);
@@ -175,7 +175,7 @@ impl Instance {
                 .set("this".to_string(), Type::Instance(self.clone()));
             return Ok(Type::Func(func));
         }
-        Err(make(ErrorMsg::UndefinedMember, member))
+        Err(runtime_error(ErrorMsg::UndefinedMember, member))
     }
 
     pub fn set(&mut self, field: String, value: Type) -> Result<Type, Exception> {

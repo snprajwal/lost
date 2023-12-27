@@ -1,7 +1,7 @@
 #[macro_use]
 extern crate log;
 
-use lost_compile::{interpret::Interpreter, run};
+use lost_compile::{interpret::Interpreter, resolve::Resolver, run};
 use std::{
     env, fs,
     io::{self, Write},
@@ -12,7 +12,7 @@ fn main() {
     debug!("Logging enabled");
 
     let args: Vec<String> = env::args().skip(1).collect();
-    debug!("Arguments: {args:#?}");
+    trace!("Arguments: {args:#?}");
 
     match args.len() {
         0 => run_repl(),
@@ -28,8 +28,9 @@ fn main() {
 
 fn run_file(file_path: &str) {
     let source = fs::read_to_string(file_path).expect("failed to read file");
+    let mut resolver = Resolver::new();
     let mut interpreter = Interpreter::new();
-    if let Err(errs) = run(&source, &mut interpreter) {
+    if let Err(errs) = run(&source, &mut resolver, &mut interpreter) {
         errs.iter().for_each(|e| eprintln!("{e}"));
     }
 }
@@ -46,6 +47,7 @@ fn run_repl() {
         AUTHORS
     );
     let (stdin, mut stdout) = (io::stdin(), io::stdout());
+    let mut resolver = Resolver::new();
     let mut interpreter = Interpreter::new();
     loop {
         let mut line = String::default();
@@ -56,7 +58,7 @@ fn run_repl() {
         if n == 0 {
             break;
         }
-        if let Err(errs) = run(&line, &mut interpreter) {
+        if let Err(errs) = run(&line, &mut resolver, &mut interpreter) {
             errs.iter().for_each(|e| eprintln!("{e}"));
         }
     }

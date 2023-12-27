@@ -1,10 +1,9 @@
 use std::{cell::RefCell, collections::HashMap, rc::Rc};
 
 use log::debug;
-use lost_syntax::ast::Literal;
 
 use crate::{
-    error::{make, ErrorMsg, Exception},
+    error::{runtime_error, ErrorMsg, Exception},
     stdlib,
     types::Type,
 };
@@ -18,7 +17,7 @@ pub struct Env {
 impl Env {
     pub fn new() -> Rc<RefCell<Self>> {
         let mut env = Self::default();
-        stdlib::init_io(&mut env);
+        stdlib::init(&mut env);
         Rc::new(RefCell::new(env))
     }
 
@@ -29,10 +28,9 @@ impl Env {
         }))
     }
 
-    pub fn set(&mut self, name: String, value: Type) -> Type {
+    pub fn set(&mut self, name: String, value: Type) {
         debug!("Set {name} -> {value:?}");
         self.values.insert(name, value.clone());
-        value
     }
 
     pub fn get(&self, name: String) -> Result<Type, Exception> {
@@ -44,10 +42,10 @@ impl Env {
             debug!("Get {name} from parent");
             return parent.borrow().get(name);
         }
-        Err(make(ErrorMsg::UndefinedVar, name))
+        Err(runtime_error(ErrorMsg::UndefinedVar, name))
     }
 
-    pub fn assign(&mut self, name: String, value: Type) -> Result<Type, Exception> {
+    pub fn assign(&mut self, name: String, value: Type) -> Result<(), Exception> {
         debug!("Assign {name} -> {value:?})");
         if self.values.contains_key(&name) {
             return Ok(self.set(name, value));
@@ -56,16 +54,41 @@ impl Env {
             debug!("Assign {name} in parent");
             return parent.borrow_mut().assign(name, value);
         }
-        Err(make(ErrorMsg::UndefinedVar, name))
+        Err(runtime_error(ErrorMsg::UndefinedVar, name))
     }
 
-    pub fn from_literal(&self, value: Literal) -> Result<Type, Exception> {
-        Ok(match value {
-            Literal::Str(s) => Type::Str(s),
-            Literal::Number(n) => Type::Number(n),
-            Literal::Boolean(b) => Type::Boolean(b),
-            Literal::Ident(name) => return self.get(name),
-            Literal::Null => Type::Null,
-        })
+    pub fn get_at_depth(&self, name: String, depth: usize) -> Result<Type, Exception> {
+        debug!("Get {name} at depth {depth}");
+        if depth == 0 {
+            if let Some(value) = self.values.get(&name) {
+                return Ok(value.clone());
+            }
+            return Err(runtime_error(ErrorMsg::MisresolvedVar, name));
+        }
+        self.parent
+            .as_ref()
+            .expect("depth exceeds maximum environment depth")
+            .borrow()
+            .get_at_depth(name, depth - 1)
+    }
+
+    pub fn assign_at_depth(
+        &mut self,
+        name: String,
+        value: Type,
+        depth: usize,
+    ) -> Result<(), Exception> {
+        debug!("Set {name} -> {value} at depth {depth}");
+        if depth == 0 {
+            if self.values.contains_key(&name) {
+                return Ok(self.set(name, value));
+            }
+            return Err(runtime_error(ErrorMsg::MisresolvedVar, name));
+        }
+        self.parent
+            .as_ref()
+            .expect("depth exceeds maximum environment depth")
+            .borrow_mut()
+            .assign_at_depth(name, value, depth - 1)
     }
 }
