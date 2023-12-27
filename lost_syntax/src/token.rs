@@ -38,7 +38,6 @@ pub enum TokenKind {
     DECREMENT,
     // Comparisons
     BANG_EQUAL,
-    EQUAL,
     EQUAL_EQUAL,
     GREATER,
     GREATER_EQUAL,
@@ -65,6 +64,8 @@ pub enum TokenKind {
     LET,
     WHILE,
     // Miscellaneous tokens
+    EQUAL,
+    INHERIT,
     COMMENT,
     WHITESPACE,
     EOF,

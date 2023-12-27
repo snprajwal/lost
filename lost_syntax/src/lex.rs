@@ -59,24 +59,18 @@ impl<'a> Lexer<'a> {
         match self.advance() {
             Some(c) => {
                 match c {
-                    '!' => {
-                        Ok(self.lookahead_for_token('=', TokenKind::BANG_EQUAL, TokenKind::BANG))
+                    '!' => Ok(self.advance_if_or('=', TokenKind::BANG_EQUAL, TokenKind::BANG)),
+                    '=' => Ok(self.advance_if_or('=', TokenKind::EQUAL_EQUAL, TokenKind::EQUAL)),
+                    '>' => {
+                        Ok(self.advance_if_or('=', TokenKind::GREATER_EQUAL, TokenKind::GREATER))
                     }
-                    '=' => {
-                        Ok(self.lookahead_for_token('=', TokenKind::EQUAL_EQUAL, TokenKind::EQUAL))
-                    }
-                    '>' => Ok(self.lookahead_for_token(
-                        '=',
-                        TokenKind::GREATER_EQUAL,
-                        TokenKind::GREATER,
-                    )),
-                    '<' => {
-                        Ok(self.lookahead_for_token('=', TokenKind::LESS_EQUAL, TokenKind::LESS))
-                    }
-                    '+' => Ok(self.lookahead_for_token('+', TokenKind::INCREMENT, TokenKind::PLUS)),
-                    '-' => {
-                        Ok(self.lookahead_for_token('-', TokenKind::DECREMENT, TokenKind::MINUS))
-                    }
+                    '<' => Ok(if self.advance_if(|t| t == '=').is_some() {
+                        self.make_token(TokenKind::LESS_EQUAL)
+                    } else {
+                        self.advance_if_or('-', TokenKind::INHERIT, TokenKind::LESS)
+                    }),
+                    '+' => Ok(self.advance_if_or('+', TokenKind::INCREMENT, TokenKind::PLUS)),
+                    '-' => Ok(self.advance_if_or('-', TokenKind::DECREMENT, TokenKind::MINUS)),
                     '/' => Ok(self.lex_slash_or_comment()),
                     '"' => self.lex_string(),
                     _ => {
@@ -204,7 +198,7 @@ impl<'a> Lexer<'a> {
         count.ne(&0).then_some(count)
     }
 
-    fn lookahead_for_token(
+    fn advance_if_or(
         &mut self,
         match_char: char,
         if_match: TokenKind,

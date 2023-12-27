@@ -27,13 +27,13 @@ impl Interpreter {
         depths: HashMap<Ident, usize>,
     ) -> Result<(), Exception> {
         self.depths.extend(depths);
-        self.interpret_all(source.items)
+        self.interpret_all(&source.items)
     }
 
-    pub fn interpret_all(&mut self, items: Vec<Item>) -> Result<(), Exception> {
+    pub fn interpret_all(&mut self, items: &[Item]) -> Result<(), Exception> {
         items
-            .into_iter()
-            .try_for_each(|item| self.interpret_item(item))
+            .iter()
+            .try_for_each(|item| self.interpret_item(item.clone()))
     }
 
     fn interpret_item(&mut self, item: Item) -> Result<(), Exception> {
@@ -48,10 +48,14 @@ impl Interpreter {
             Item::WhileStmt { condition, body } => self.interpret_while_stmt(condition, *body),
             Item::ReturnStmt(expr) => self.interpret_return_stmt(expr),
             Item::Block(items) => self
-                .interpret_block(items, Env::with_parent(Rc::clone(&self.env)))
+                .interpret_block(&items, Env::with_parent(Rc::clone(&self.env)))
                 .map(|_| ()),
             Item::Function { ident, args, body } => self.interpret_function(ident, args, body),
-            Item::Class { ident, methods } => self.interpret_class(ident, methods),
+            Item::Class {
+                ident,
+                parent,
+                methods,
+            } => self.interpret_class(ident, parent, methods),
         }
     }
 
@@ -92,11 +96,7 @@ impl Interpreter {
         Ok(())
     }
 
-    fn interpret_block(
-        &mut self,
-        items: Vec<Item>,
-        env: Rc<RefCell<Env>>,
-    ) -> Result<(), Exception> {
+    fn interpret_block(&mut self, items: &[Item], env: Rc<RefCell<Env>>) -> Result<(), Exception> {
         let old_env = Rc::clone(&self.env);
         self.env = env;
         let ret = self.interpret_all(items);
@@ -125,7 +125,24 @@ impl Interpreter {
         }
     }
 
-    fn interpret_class(&mut self, ident: Ident, methods: Vec<Item>) -> Result<(), Exception> {
+    fn interpret_class(
+        &mut self,
+        ident: Ident,
+        parent: Option<Ident>,
+        methods: Vec<Item>,
+    ) -> Result<(), Exception> {
+        let (old_env, parent_class) = if let Some(p) = parent {
+            let t @ Type::Class(c) = &self.interpret_ident(p.clone())? else {
+                return Err(runtime_error(ErrorMsg::ExpectedClass, p.name));
+            };
+            // Create a new parent env with the parent class
+            let old_env = Rc::clone(&self.env);
+            self.env = Env::with_parent(Rc::clone(&self.env));
+            self.env.borrow_mut().set("super".to_string(), t.clone());
+            (Some(old_env), Some(Box::new(c.clone())))
+        } else {
+            (None, None)
+        };
         let mut method_map: HashMap<String, Func> = HashMap::default();
         for method in methods {
             if let Item::Function { ident, args, body } = method {
@@ -135,10 +152,16 @@ impl Interpreter {
                 unreachable!("non-functions cannot be passed as methods");
             }
         }
+        if let Some(env) = old_env {
+            // Go back to the old env without `super`
+            self.env = env;
+        }
+
         self.env.borrow_mut().set(
             ident.name.clone(),
             Type::Class(Class {
                 name: ident.name,
+                parent: parent_class,
                 methods: method_map,
             }),
         );
@@ -165,6 +188,7 @@ impl Interpreter {
                 field,
                 value,
             } => self.interpret_field_set(*object, field, *value),
+            Expr::Super(super_, method) => self.interpret_super(super_, method),
         }
     }
 
@@ -173,7 +197,10 @@ impl Interpreter {
         self.env.borrow_mut().assign_at_depth(
             ident.name.clone(),
             value,
-            *self.depths.get(&ident).expect("unresolved variable"),
+            *self
+                .depths
+                .get(&ident)
+                .ok_or_else(|| runtime_error(ErrorMsg::MisresolvedVar, ident.name))?,
         )?;
         Ok(Type::Null)
     }
@@ -193,7 +220,7 @@ impl Interpreter {
             *self
                 .depths
                 .get(&ident)
-                .expect(&format!("unresolved variable {}", ident.name)),
+                .ok_or_else(|| runtime_error(ErrorMsg::MisresolvedVar, ident.name))?,
         )
     }
 
@@ -216,7 +243,10 @@ impl Interpreter {
                     self.env.borrow_mut().assign_at_depth(
                         ident.name.clone(),
                         Type::Number(n + 1.0),
-                        *self.depths.get(&ident).expect("unresolved variable"),
+                        *self
+                            .depths
+                            .get(&ident)
+                            .ok_or_else(|| runtime_error(ErrorMsg::MisresolvedVar, ident.name))?,
                     )?;
                     Ok(Type::Number(n + 1.0))
                 } else {
@@ -231,7 +261,10 @@ impl Interpreter {
                     self.env.borrow_mut().assign_at_depth(
                         ident.name.clone(),
                         Type::Number(n - 1.0),
-                        *self.depths.get(&ident).expect("unresolved variable"),
+                        *self
+                            .depths
+                            .get(&ident)
+                            .ok_or_else(|| runtime_error(ErrorMsg::MisresolvedVar, ident.name))?,
                     )?;
                     Ok(Type::Number(n - 1.0))
                 } else {
@@ -316,7 +349,7 @@ impl Interpreter {
             Type::Func(f) => Box::new(f),
             Type::NativeFunc(f) => Box::new(f),
             Type::Class(c) => Box::new(c),
-            _ => return Err(runtime_error(ErrorMsg::InvalidCallExpr, ty.to_string())),
+            _ => return Err(runtime_error(ErrorMsg::InvalidCall, ty.to_string())),
         };
         // Ensure the number of arguments matches the function definition
         match func.arity().cmp(&arg_exprs.len()) {
@@ -339,17 +372,17 @@ impl Interpreter {
             args.push(self.interpret_expr(arg)?);
         }
 
-        func.call(self, args)
+        func.call(self, &args)
     }
 
-    pub(crate) fn call(&mut self, func: Func, args: Vec<Type>) -> Result<Type, Exception> {
-        let env = Env::with_parent(func.env);
+    pub(crate) fn call(&mut self, func: &Func, args: &[Type]) -> Result<Type, Exception> {
+        let env = Env::with_parent(Rc::clone(&func.env));
         // Add the arguments to the function env
-        for (ident, value) in func.args.into_iter().zip(args) {
-            env.borrow_mut().set(ident, value);
+        for (ident, value) in func.args.iter().zip(args) {
+            env.borrow_mut().set(ident.clone(), value.clone());
         }
         // If there is no error or return value, return null
-        let Err(exception) = self.interpret_block(func.body, env) else {
+        let Err(exception) = self.interpret_block(&func.body, env) else {
             return Ok(Type::Null);
         };
         // If the exception is a return value, propagate
@@ -364,7 +397,7 @@ impl Interpreter {
     fn interpret_field_get(&mut self, object: Expr, field: Ident) -> Result<Type, Exception> {
         let ty = self.interpret_expr(object)?;
         let Type::Instance(instance) = ty else {
-            return Err(runtime_error(ErrorMsg::InvalidObject, ty.to_string()));
+            return Err(runtime_error(ErrorMsg::ExpectedObject, ty.to_string()));
         };
         instance.get(field.name)
     }
@@ -380,16 +413,50 @@ impl Interpreter {
         };
         let ty = self.interpret_expr(object.clone())?;
         let Type::Instance(mut instance) = ty else {
-            return Err(runtime_error(ErrorMsg::InvalidObject, ty.to_string()));
+            return Err(runtime_error(ErrorMsg::ExpectedObject, ty.to_string()));
         };
         let value = self.interpret_expr(expr)?;
         instance.set(field.name, value)?;
         self.env.borrow_mut().assign_at_depth(
-            instance.to_string(),
+            ident.name.clone(),
             Type::Instance(instance),
-            *self.depths.get(ident).expect("unresolved object"),
+            *self
+                .depths
+                .get(ident)
+                .ok_or_else(|| runtime_error(ErrorMsg::MisresolvedVar, ident.name.clone()))?,
         )?;
         Ok(Type::Null)
+    }
+
+    fn interpret_super(&self, super_: Ident, method: Ident) -> Result<Type, Exception> {
+        let depth = self
+            .depths
+            .get(&super_)
+            .ok_or_else(|| runtime_error(ErrorMsg::MisresolvedVar, super_.name))?;
+        let Type::Class(parent) = self
+            .env
+            .borrow()
+            .get_at_depth("super".to_string(), *depth)?
+        else {
+            unreachable!("`super` cannot be a non-class type")
+        };
+        let Type::Instance(this) = self
+            .env
+            .borrow()
+            .get_at_depth("this".to_string(), *depth - 1)?
+        else {
+            unreachable!("`this` cannot be a non-instance type")
+        };
+        let Some(mut method) = parent.get_method(&method.name) else {
+            return Err(runtime_error(ErrorMsg::UndefinedMethod, method.name));
+        };
+        // Add `this` into a parent env for the function to access
+        method.env = Env::with_parent(method.env);
+        method
+            .env
+            .borrow_mut()
+            .set("this".to_string(), Type::Instance(this));
+        return Ok(Type::Func(method));
     }
 
     fn is_eq(&self, left: &Type, right: &Type) -> bool {
@@ -468,7 +535,7 @@ mod tests {
             1,
         );
         assert!(interpreter
-            .interpret_block(items, Env::with_parent(Rc::clone(&interpreter.env)))
+            .interpret_block(&items, Env::with_parent(Rc::clone(&interpreter.env)))
             .is_ok());
     }
 

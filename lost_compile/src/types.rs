@@ -42,7 +42,7 @@ impl Display for Type {
 
 pub trait Callable {
     fn arity(&self) -> usize;
-    fn call(&self, interpreter: &mut Interpreter, args: Vec<Type>) -> Result<Type, Exception>;
+    fn call(&self, interpreter: &mut Interpreter, args: &[Type]) -> Result<Type, Exception>;
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -63,8 +63,8 @@ impl Callable for Func {
     fn arity(&self) -> usize {
         self.args.len()
     }
-    fn call(&self, interpreter: &mut Interpreter, args: Vec<Type>) -> Result<Type, Exception> {
-        interpreter.call(self.clone(), args)
+    fn call(&self, interpreter: &mut Interpreter, args: &[Type]) -> Result<Type, Exception> {
+        interpreter.call(self, args)
     }
 }
 
@@ -72,7 +72,7 @@ impl Callable for Func {
 pub struct NativeFunc {
     pub name: String,
     pub args: Vec<String>,
-    pub body: fn(&mut Interpreter, Vec<Type>) -> Result<Type, Exception>,
+    pub body: fn(&mut Interpreter, &[Type]) -> Result<Type, Exception>,
 }
 
 impl PartialEq for NativeFunc {
@@ -104,7 +104,7 @@ impl Callable for NativeFunc {
     fn arity(&self) -> usize {
         self.args.len()
     }
-    fn call(&self, interpreter: &mut Interpreter, args: Vec<Type>) -> Result<Type, Exception> {
+    fn call(&self, interpreter: &mut Interpreter, args: &[Type]) -> Result<Type, Exception> {
         (self.body)(interpreter, args)
     }
 }
@@ -112,6 +112,7 @@ impl Callable for NativeFunc {
 #[derive(Clone, Debug, PartialEq)]
 pub struct Class {
     pub name: String,
+    pub parent: Option<Box<Class>>,
     pub methods: HashMap<String, Func>,
 }
 
@@ -129,21 +130,43 @@ impl Callable for Class {
             0
         }
     }
-    fn call(&self, interpreter: &mut Interpreter, args: Vec<Type>) -> Result<Type, Exception> {
+    fn call(&self, interpreter: &mut Interpreter, args: &[Type]) -> Result<Type, Exception> {
         let instance = Type::Instance(Instance {
             fields: HashMap::default(),
             class: self.clone(),
         });
+        self.init(interpreter, &args, instance)
+    }
+}
+
+impl Class {
+    pub fn get_method(&self, method: &str) -> Option<Func> {
+        self.methods
+            .get(method)
+            .cloned()
+            .or_else(|| self.parent.as_ref().and_then(|p| p.get_method(method)))
+    }
+    fn init(
+        &self,
+        interpreter: &mut Interpreter,
+        args: &[Type],
+        instance: Type,
+    ) -> Result<Type, Exception> {
+        let initialised = if let Some(p) = &self.parent {
+            p.init(interpreter, args, instance)?
+        } else {
+            instance
+        };
         // The constructor has the same name as the class.
         // If it is in the list of defined methods, run it.
         if let Some(mut init) = self.methods.get(&self.name).cloned() {
             init.env = Env::with_parent(init.env);
-            init.env
-                .borrow_mut()
-                .set("this".to_string(), instance.clone());
+            init.env.borrow_mut().set("this".to_string(), initialised);
             init.call(interpreter, args)?;
+            Ok(init.env.borrow().get("this".to_string())?)
+        } else {
+            Ok(initialised)
         }
-        Ok(instance)
     }
 }
 
@@ -160,19 +183,20 @@ impl Display for Instance {
 }
 
 impl Instance {
-    pub fn get(&self, member: String) -> Result<Type, Exception> {
+    pub fn get(self, member: String) -> Result<Type, Exception> {
         if let Some(value) = self.fields.get(&member) {
             return Ok(value.clone());
         }
-        // The constructor must be fetched or explicitly called
+        // The constructor must not be fetched or explicitly called
         if self.class.name == member {
             return Err(runtime_error(ErrorMsg::GetConstructor, member));
         }
-        if let Some(mut func) = self.class.methods.get(&member).cloned() {
+        if let Some(mut func) = self.class.get_method(&member) {
+            // Add `this` into a parent env for the function to access
             func.env = Env::with_parent(func.env);
             func.env
                 .borrow_mut()
-                .set("this".to_string(), Type::Instance(self.clone()));
+                .set("this".to_string(), Type::Instance(self));
             return Ok(Type::Func(func));
         }
         Err(runtime_error(ErrorMsg::UndefinedMember, member))

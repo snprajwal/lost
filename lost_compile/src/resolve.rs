@@ -11,7 +11,6 @@ use crate::{
 enum Node {
     Function,
     Method,
-    Class,
 }
 
 #[derive(Debug, Default)]
@@ -19,6 +18,7 @@ pub struct Resolver {
     scopes: Vec<HashMap<String, bool>>,
     depths: HashMap<Ident, usize>,
     node: Option<Node>,
+    is_child_class: bool,
 }
 
 impl Resolver {
@@ -54,15 +54,12 @@ impl Resolver {
             Item::Block(items) => self.resolve_block(items),
             Item::WhileStmt { condition, body } => self.resolve_while_stmt(condition, *body),
             Item::ReturnStmt(expr) => self.resolve_return_stmt(expr),
-            Item::Function {
-                ident: name,
-                args,
-                body,
-            } => self.resolve_func_decl(name, args, body),
+            Item::Function { ident, args, body } => self.resolve_func_decl(ident, args, body),
             Item::Class {
-                ident: name,
+                ident,
+                parent,
                 methods,
-            } => self.resolve_class(name, methods),
+            } => self.resolve_class(ident, parent, methods),
         }
     }
 
@@ -145,13 +142,26 @@ impl Resolver {
         Ok(())
     }
 
-    fn resolve_class(&mut self, ident: Ident, methods: Vec<Item>) -> Result<(), Exception> {
-        let old = self.node;
-        self.node = Some(Node::Class);
+    fn resolve_class(
+        &mut self,
+        ident: Ident,
+        parent: Option<Ident>,
+        methods: Vec<Item>,
+    ) -> Result<(), Exception> {
         self.declare(ident.name.clone())?;
-        self.define(ident.name)?;
-        self.init_scope();
+        self.define(ident.name.clone())?;
 
+        if let Some(p) = &parent {
+            if p.name == ident.name {
+                return Err(resolution_error(ErrorMsg::SelfInherit, p.name.clone()));
+            }
+            self.is_child_class = true;
+            self.resolve_ident(p.clone())?;
+            self.init_scope();
+            self.define("super".to_string())?;
+        }
+
+        self.init_scope();
         self.define("this".to_string())?;
         for method in methods {
             if let Item::Function { args, body, .. } = method {
@@ -160,9 +170,11 @@ impl Resolver {
                 unreachable!("non-functions cannot be passed as methods");
             }
         }
-
         self.end_scope();
-        self.node = old;
+        if parent.is_some() {
+            self.end_scope();
+        }
+
         Ok(())
     }
 
@@ -181,21 +193,41 @@ impl Resolver {
             Expr::FieldSet { object, value, .. } => self
                 .resolve_expr(*object)
                 .and_then(|_| self.resolve_expr(*value)),
+            Expr::Super(super_, _) => self.resolve_ident(super_),
         }
     }
 
     fn resolve_ident(&mut self, ident: Ident) -> Result<(), Exception> {
         // The `this` variable cannot be used outside class methods
-        if ident.name == "this" && self.node != Some(Node::Method) {
-            return Err(resolution_error(
-                ErrorMsg::ThisOutsideMethod,
-                String::default(),
-            ));
+        match ident.name.as_str() {
+            "this" => {
+                if self.node != Some(Node::Method) {
+                    return Err(resolution_error(
+                        ErrorMsg::ThisOutsideMethod,
+                        String::default(),
+                    ));
+                }
+            }
+            "super" => {
+                if self.node != Some(Node::Method) {
+                    return Err(resolution_error(
+                        ErrorMsg::SuperOutsideMethod,
+                        String::default(),
+                    ));
+                }
+                if !self.is_child_class {
+                    return Err(resolution_error(
+                        ErrorMsg::SuperWithoutParent,
+                        String::default(),
+                    ));
+                }
+            }
+            _ => (),
         }
 
         if let Some(&value) = self.scopes.last().and_then(|s| s.get(&ident.name)) {
             if !value {
-                return Err(resolution_error(ErrorMsg::SelfIntialiser, ident.name));
+                return Err(resolution_error(ErrorMsg::SelfInitialiser, ident.name));
             }
         };
 

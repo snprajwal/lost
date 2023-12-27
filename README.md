@@ -4,7 +4,7 @@ A general-purpose interpreted programming language written in Rust. Guaranteed t
 
 # Why the name?
 
-This was inspired by the Lox programming language from [Crafting Interpreters](https://craftinginterpreters.com) by Robert Nystrom.
+This is loosely based on the Lox programming language from [Crafting Interpreters](https://craftinginterpreters.com) by Robert Nystrom.
 
 For obvious reasons, I cannot name it Lust, hence Lox + Rust = Lost :)
 
@@ -21,14 +21,18 @@ The syntax is fairly straightforward, and is mostly borrowed from existing langu
 ```rust
 fn foo(n) {
     if (n == 0) {
-        print("Zero");
+        print("zero");
         while (n <= 1) {
             print(n);
             n = n + 1;
         }
         return true;
     } else {
-        print("Not zero");
+        print("not zero");
+        // Post-increment (i++) tends to be ambiguous, both in
+        // expected behaviour and actual outcome. We're better
+        // off without using it - the only type of increment
+        // available is pre-increment (++i).
         for (let i = 0; i < n; ++i) {
             print(i);
         }
@@ -36,10 +40,9 @@ fn foo(n) {
     }
 }
 
-let n = 5; // All numbers are handled as floating point values
-let isZero = foo(n);
-print(isZero); // false
-print(foo(0)); // true
+let n = 5; // All numbers are floating point values
+print(foo(n)); // false
+print(foo(0)); // true, prints "Zero"
 
 let a; // Uninitialised variables are null by default
 print(a); // null
@@ -48,12 +51,24 @@ print(a); // null
 // There are no fields in the class declaration, only methods.
 // Self-referencing works with the `this` keyword.
 class Vehicle {
+  // The constructor is just a function
+  // with the same name as the class
+  fn Vehicle() {
+    this.wheels = 0;
+  }
+
   fn countWheels() {
     print(this.wheels);
   }
 }
 
-let car = Vehicle();
-car.wheels = 4;
+// Classes can inherit from a parent class with the `<-` operator
+class Car <- Vehicle {
+  fn Car() {
+    this.wheels = 4;
+  }
+}
+
+let car = Car();
 car.countWheels(); // 4
 ```

@@ -58,7 +58,7 @@ impl<'a> Parser<'a> {
     fn parse_let_stmt(&mut self) -> Result<Item, Error> {
         // Consume the `let` keyword
         self.advance();
-        let name = self.advance_or_err(TokenKind::IDENT, ErrorMsg::InvalidIdent)?;
+        let name = self.advance_or_err(TokenKind::IDENT, ErrorMsg::ExpectedIdent)?;
         let init = if self.advance_if(|t| t.kind == TokenKind::EQUAL).is_some() {
             Some(self.parse_expr()?)
         } else {
@@ -169,10 +169,20 @@ impl<'a> Parser<'a> {
     fn parse_class(&mut self) -> Result<Item, Error> {
         // Consume the `class` keyword
         self.advance();
-        let name = self.advance_or_err(TokenKind::IDENT, ErrorMsg::InvalidIdent)?;
+        let name = self.advance_or_err(TokenKind::IDENT, ErrorMsg::ExpectedIdent)?;
         let ident = Ident {
             name: name.lexeme.clone(),
             range: name.range,
+        };
+        // Consume the parent class, if any
+        let parent = if self.advance_if(|t| t.kind == TokenKind::INHERIT).is_some() {
+            let name = self.advance_or_err(TokenKind::IDENT, ErrorMsg::ExpectedParentClass)?;
+            Some(Ident {
+                name: name.lexeme.clone(),
+                range: name.range,
+            })
+        } else {
+            None
         };
         self.advance_or_err(TokenKind::LBRACE, ErrorMsg::MissingOpeningBrace)?;
         let mut methods = vec![];
@@ -186,13 +196,17 @@ impl<'a> Parser<'a> {
         }
         self.advance_or_err(TokenKind::RBRACE, ErrorMsg::MissingClosingBrace)?;
 
-        Ok(Item::Class { ident, methods })
+        Ok(Item::Class {
+            ident,
+            parent,
+            methods,
+        })
     }
 
     fn parse_function(&mut self) -> Result<Item, Error> {
         // Consume the `fn` keyword
         self.advance();
-        let name = self.advance_or_err(TokenKind::IDENT, ErrorMsg::InvalidIdent)?;
+        let name = self.advance_or_err(TokenKind::IDENT, ErrorMsg::ExpectedIdent)?;
         let ident = Ident {
             name: name.lexeme.clone(),
             range: name.range,
@@ -205,7 +219,7 @@ impl<'a> Parser<'a> {
             .filter(|t| t.kind == TokenKind::RPAREN)
             .is_none()
         {
-            let name = self.advance_or_err(TokenKind::IDENT, ErrorMsg::InvalidIdent)?;
+            let name = self.advance_or_err(TokenKind::IDENT, ErrorMsg::ExpectedIdent)?;
             args.push(Ident {
                 name: name.lexeme.clone(),
                 range: name.range,
@@ -354,9 +368,7 @@ impl<'a> Parser<'a> {
         while let Some(op) =
             self.advance_if(|t| matches!(t.kind, TokenKind::EQUAL_EQUAL | TokenKind::BANG_EQUAL))
         {
-            // Infallible unwrap as we are ensuring the right token kind above
-            let bin_op = ast::BinOp::from_token(op.kind)
-                .expect("non-binary operators cannot be present here");
+            let bin_op = ast::BinOp::from_token(op.kind);
             let rhs = self.parse_cmp()?;
             lhs = Expr::Binary {
                 lhs: Box::new(lhs),
@@ -378,9 +390,7 @@ impl<'a> Parser<'a> {
                     | TokenKind::LESS_EQUAL
             )
         }) {
-            // Infallible unwrap as we are ensuring the right token kind above
-            let bin_op = ast::BinOp::from_token(op.kind)
-                .expect("non-binary operators cannot be present here");
+            let bin_op = ast::BinOp::from_token(op.kind);
             let rhs = self.parse_term()?;
             lhs = Expr::Binary {
                 lhs: Box::new(lhs),
@@ -399,9 +409,7 @@ impl<'a> Parser<'a> {
                 TokenKind::PLUS | TokenKind::MINUS | TokenKind::MODULO
             )
         }) {
-            // Infallible unwrap as we are ensuring the right token kind above
-            let bin_op = ast::BinOp::from_token(op.kind)
-                .expect("non-binary operators cannot be present here");
+            let bin_op = ast::BinOp::from_token(op.kind);
             let rhs = self.parse_factor()?;
             lhs = Expr::Binary {
                 lhs: Box::new(lhs),
@@ -417,9 +425,7 @@ impl<'a> Parser<'a> {
         while let Some(op) =
             self.advance_if(|t| matches!(t.kind, TokenKind::SLASH | TokenKind::STAR))
         {
-            // Infallible unwrap as we are ensuring the right token kind above
-            let bin_op = ast::BinOp::from_token(op.kind)
-                .expect("non-binary operators cannot be present here");
+            let bin_op = ast::BinOp::from_token(op.kind);
             let rhs = self.parse_unary()?;
             lhs = Expr::Binary {
                 lhs: Box::new(lhs),
@@ -438,9 +444,7 @@ impl<'a> Parser<'a> {
             )
         }) {
             Expr::Unary {
-                // Infallible unwrap as we are ensuring the right token kind above
-                op: ast::UnaryOp::from_token(op.kind)
-                    .expect("non-unary operators cannot be present here"),
+                op: ast::UnaryOp::from_token(op.kind),
                 expr: Box::new(self.parse_unary()?),
             }
         } else {
@@ -477,7 +481,7 @@ impl<'a> Parser<'a> {
                 TokenKind::DOT => {
                     // Consume the dot
                     self.advance();
-                    let name = self.advance_or_err(TokenKind::IDENT, ErrorMsg::InvalidIdent)?;
+                    let name = self.advance_or_err(TokenKind::IDENT, ErrorMsg::ExpectedIdent)?;
                     expr = Expr::FieldGet {
                         object: Box::new(expr),
                         field: Ident {
@@ -509,6 +513,26 @@ impl<'a> Parser<'a> {
                         name: t.lexeme.clone(),
                         range: t.range,
                     }))
+                }
+                TokenKind::SUPER => {
+                    let super_ = t.clone();
+                    return self
+                        .advance_or_err(TokenKind::DOT, ErrorMsg::ExpectedMethod)
+                        .and_then(|_| {
+                            self.advance_or_err(TokenKind::IDENT, ErrorMsg::ExpectedMethod)
+                        })
+                        .map(|t| {
+                            Expr::Super(
+                                Ident {
+                                    name: super_.lexeme.clone(),
+                                    range: super_.range,
+                                },
+                                Ident {
+                                    name: t.lexeme.clone(),
+                                    range: t.range,
+                                },
+                            )
+                        });
                 }
                 _ => return Err(Self::error(t, ErrorMsg::UnexpectedToken)),
             },
@@ -624,7 +648,7 @@ mod tests {
                 items: vec![Item::LetStmt {
                     ident: Ident {
                         name: "x".to_owned(),
-                        range: TextRange { start: 0, end: 0 },
+                        range: TextRange { start: 4, end: 5 },
                     },
                     init: Some(Expr::Literal(Literal::Number(42.0))),
                 }],
@@ -685,7 +709,7 @@ mod tests {
                     Item::LetStmt {
                         ident: Ident {
                             name: var.clone(),
-                            range: TextRange { start: 0, end: 0 },
+                            range: TextRange { start: 9, end: 10 },
                         },
                         init: Some(Expr::Literal(Literal::Number(0.0))),
                     },
@@ -693,7 +717,7 @@ mod tests {
                         condition: Expr::Binary {
                             lhs: Box::new(Expr::Ident(Ident {
                                 name: var.clone(),
-                                range: TextRange { start: 0, end: 0 },
+                                range: TextRange { start: 16, end: 17 },
                             })),
                             op: ast::BinOp::Less,
                             rhs: Box::new(Expr::Literal(Literal::Number(5.0))),
@@ -701,17 +725,17 @@ mod tests {
                         body: Box::new(Item::Block(vec![
                             Item::Block(vec![Item::ExprStmt(Expr::Ident(Ident {
                                 name: var.clone(),
-                                range: TextRange { start: 0, end: 0 },
+                                range: TextRange { start: 36, end: 37 },
                             }))]),
                             Item::ExprStmt(Expr::Assignment {
                                 name: Ident {
                                     name: var.clone(),
-                                    range: TextRange { start: 0, end: 0 },
+                                    range: TextRange { start: 23, end: 24 },
                                 },
                                 value: Box::new(Expr::Binary {
                                     lhs: Box::new(Expr::Ident(Ident {
                                         name: var.clone(),
-                                        range: TextRange { start: 0, end: 0 },
+                                        range: TextRange { start: 27, end: 28 },
                                     })),
                                     op: ast::BinOp::Plus,
                                     rhs: Box::new(Expr::Literal(Literal::Number(1.0))),
@@ -733,14 +757,14 @@ mod tests {
                     Item::LetStmt {
                         ident: Ident {
                             name: "x".to_owned(),
-                            range: TextRange { start: 0, end: 0 },
+                            range: TextRange { start: 6, end: 7 },
                         },
                         init: Some(Expr::Literal(Literal::Number(1.0))),
                     },
                     Item::LetStmt {
                         ident: Ident {
                             name: "y".to_owned(),
-                            range: TextRange { start: 0, end: 0 },
+                            range: TextRange { start: 17, end: 18 },
                         },
                         init: Some(Expr::Literal(Literal::Number(2.0))),
                     },

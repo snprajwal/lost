@@ -11,6 +11,7 @@ pub struct Source {
 pub enum Item {
     Class {
         ident: Ident,
+        parent: Option<Ident>,
         methods: Vec<Item>,
     },
     Function {
@@ -45,15 +46,14 @@ pub enum UnaryOp {
 }
 
 impl UnaryOp {
-    pub fn from_token(t: TokenKind) -> Option<Self> {
-        let op = match t {
+    pub fn from_token(t: TokenKind) -> Self {
+        match t {
             TokenKind::BANG => Self::Bang,
             TokenKind::MINUS => Self::Minus,
             TokenKind::INCREMENT => Self::Increment,
             TokenKind::DECREMENT => Self::Decrement,
-            _ => return None,
-        };
-        Some(op)
+            _ => unreachable!("non-unary operator cannot be passed to this function"),
+        }
     }
 }
 
@@ -91,8 +91,8 @@ impl Display for BinOp {
 }
 
 impl BinOp {
-    pub fn from_token(t: TokenKind) -> Option<Self> {
-        let op = match t {
+    pub fn from_token(t: TokenKind) -> Self {
+        match t {
             TokenKind::SLASH => Self::Slash,
             TokenKind::STAR => Self::Star,
             TokenKind::PLUS => Self::Plus,
@@ -104,9 +104,8 @@ impl BinOp {
             TokenKind::LESS_EQUAL => Self::LessEqual,
             TokenKind::BANG_EQUAL => Self::BangEqual,
             TokenKind::EQUAL_EQUAL => Self::EqualEqual,
-            _ => return None,
-        };
-        Some(op)
+            _ => unreachable!("non-binary operator cannot be passed to this function"),
+        }
     }
 }
 
@@ -192,4 +191,5 @@ pub enum Expr {
         field: Ident,
         value: Box<Expr>,
     },
+    Super(Ident, Ident),
 }

@@ -30,7 +30,7 @@ impl Env {
 
     pub fn set(&mut self, name: String, value: Type) {
         debug!("Set {name} -> {value:?}");
-        self.values.insert(name, value.clone());
+        self.values.insert(name, value);
     }
 
     pub fn get(&self, name: String) -> Result<Type, Exception> {
