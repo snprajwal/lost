@@ -36,7 +36,8 @@ pub fn init(env: &mut Env) {
                         time::SystemTime::now()
                             .duration_since(UNIX_EPOCH)
                             .expect("failed to calculate time")
-                            .as_secs_f64(),
+                            .as_secs_f64()
+                            * 1000.0,
                     ))
                 },
             }),
@@ -44,7 +45,7 @@ pub fn init(env: &mut Env) {
     ];
 
     fns.into_iter().for_each(|(name, f)| {
-        env.set(name.to_string(), f);
+        env.set(name, f);
     });
 }
 

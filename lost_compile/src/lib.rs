@@ -30,7 +30,7 @@ pub fn run(
             .collect::<Vec<Exception>>()
     })?;
     trace!("Resolving {root:#?}");
-    let depths = resolver.resolve(root.clone()).map_err(|e| vec![e])?;
+    let depths = resolver.resolve(&root).map_err(|e| vec![e])?;
     trace!("Interpreting with depths {depths:?}");
     interpreter.interpret(root, depths).map_err(|e| vec![e])
 }

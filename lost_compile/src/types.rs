@@ -146,6 +146,7 @@ impl Class {
             .cloned()
             .or_else(|| self.parent.as_ref().and_then(|p| p.get_method(method)))
     }
+
     fn init(
         &self,
         interpreter: &mut Interpreter,
@@ -161,9 +162,9 @@ impl Class {
         // If it is in the list of defined methods, run it.
         if let Some(mut init) = self.methods.get(&self.name).cloned() {
             init.env = Env::with_parent(init.env);
-            init.env.borrow_mut().set("this".to_string(), initialised);
+            init.env.borrow_mut().set("this", initialised);
             init.call(interpreter, args)?;
-            Ok(init.env.borrow().get("this".to_string())?)
+            Ok(init.env.borrow().get("this")?)
         } else {
             Ok(initialised)
         }
@@ -183,27 +184,25 @@ impl Display for Instance {
 }
 
 impl Instance {
-    pub fn get(self, member: String) -> Result<Type, Exception> {
-        if let Some(value) = self.fields.get(&member) {
+    pub fn get(self, member: &str) -> Result<Type, Exception> {
+        if let Some(value) = self.fields.get(member) {
             return Ok(value.clone());
         }
         // The constructor must not be fetched or explicitly called
         if self.class.name == member {
-            return Err(runtime_error(ErrorMsg::GetConstructor, member));
+            return Err(runtime_error(ErrorMsg::GetConstructor, &member));
         }
-        if let Some(mut func) = self.class.get_method(&member) {
+        if let Some(mut func) = self.class.get_method(member) {
             // Add `this` into a parent env for the function to access
             func.env = Env::with_parent(func.env);
-            func.env
-                .borrow_mut()
-                .set("this".to_string(), Type::Instance(self));
+            func.env.borrow_mut().set("this", Type::Instance(self));
             return Ok(Type::Func(func));
         }
-        Err(runtime_error(ErrorMsg::UndefinedMember, member))
+        Err(runtime_error(ErrorMsg::UndefinedMember, &member))
     }
 
-    pub fn set(&mut self, field: String, value: Type) -> Result<Type, Exception> {
-        self.fields.insert(field, value.clone());
+    pub fn set(&mut self, field: &str, value: Type) -> Result<Type, Exception> {
+        self.fields.insert(field.to_string(), value.clone());
         Ok(value)
     }
 }

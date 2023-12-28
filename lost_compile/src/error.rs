@@ -72,11 +72,11 @@ impl Display for ErrorMsg {
     }
 }
 
-pub fn runtime_error(msg: ErrorMsg, val: String) -> Exception {
+pub fn runtime_error(msg: ErrorMsg, val: &str) -> Exception {
     Exception::Error(format!("Runtime error: {} {}", msg, val))
 }
 
-pub fn resolution_error(msg: ErrorMsg, val: String) -> Exception {
+pub fn resolution_error(msg: ErrorMsg, val: &str) -> Exception {
     Exception::Error(
         format!("Resolution error: {} {}", msg, val)
             .trim()

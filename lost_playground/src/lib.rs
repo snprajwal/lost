@@ -43,7 +43,7 @@ impl World {
         // Initialise output variable. This is a hack
         // to print to JS since stdout itself can't be
         // captured and piped into a JS value.
-        env.set(REPL_OUTPUT_VAR.to_string(), Type::Str(String::default()));
+        env.set(REPL_OUTPUT_VAR, Type::Str(String::default()));
         // Add stdlib functions
         init(&mut env);
 
@@ -63,7 +63,7 @@ impl World {
                 .interpreter
                 .env
                 .borrow()
-                .get(REPL_OUTPUT_VAR.to_string())
+                .get(REPL_OUTPUT_VAR)
                 .unwrap()
                 .to_string()),
             Err(errors) => Err(errors
@@ -79,6 +79,6 @@ fn clear_output(interpreter: &Interpreter) {
     interpreter
         .env
         .borrow_mut()
-        .assign_at_depth(REPL_OUTPUT_VAR.to_string(), Type::Str(String::default()), 0)
+        .assign_at_depth(REPL_OUTPUT_VAR, Type::Str(String::default()), 0)
         .expect("no output variable present");
 }
