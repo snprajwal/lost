@@ -32,8 +32,7 @@ impl Resolver {
     }
 
     pub fn resolve(&mut self, source: &Source) -> Result<HashMap<Ident, usize>, Exception> {
-        self.resolve_all(&source.items)
-            .and_then(|_| Ok(self.depths.clone()))
+        self.resolve_all(&source.items).map(|_| self.depths.clone())
     }
 
     pub fn resolve_all(&mut self, items: &[Item]) -> Result<(), Exception> {
@@ -151,13 +150,13 @@ impl Resolver {
                 return Err(resolution_error(ErrorMsg::SelfInherit, &p.name));
             }
             self.is_child_class = true;
-            self.resolve_ident(&p)?;
+            self.resolve_ident(p)?;
             self.init_scope();
-            self.define(&"super".to_string())?;
+            self.define("super")?;
         }
 
         self.init_scope();
-        self.define(&"this".to_string())?;
+        self.define("this")?;
         for method in methods {
             if let Item::Function { args, body, .. } = method {
                 self.resolve_function(args, body, Node::Method)?;
@@ -261,7 +260,7 @@ impl Resolver {
     fn declare(&mut self, name: &str) -> Result<(), Exception> {
         self.scopes
             .last_mut()
-            .ok_or_else(|| resolution_error(ErrorMsg::NoScope, &name))
+            .ok_or_else(|| resolution_error(ErrorMsg::NoScope, name))
             .map(|s| {
                 s.insert(name.to_string(), false);
             })
@@ -270,7 +269,7 @@ impl Resolver {
     fn define(&mut self, name: &str) -> Result<(), Exception> {
         self.scopes
             .last_mut()
-            .ok_or_else(|| resolution_error(ErrorMsg::NoScope, &name))
+            .ok_or_else(|| resolution_error(ErrorMsg::NoScope, name))
             .map(|s| {
                 s.insert(name.to_string(), true);
             })

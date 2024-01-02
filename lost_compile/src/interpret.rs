@@ -46,7 +46,7 @@ impl Interpreter {
             Item::WhileStmt { condition, body } => self.interpret_while_stmt(condition, body),
             Item::ReturnStmt(expr) => self.interpret_return_stmt(expr),
             Item::Block(items) => self
-                .interpret_block(&items, Env::with_parent(Rc::clone(&self.env)))
+                .interpret_block(items, Env::with_parent(Rc::clone(&self.env)))
                 .map(|_| ()),
             Item::Function { ident, args, body } => self.interpret_function(ident, args, body),
             Item::Class {
@@ -74,10 +74,8 @@ impl Interpreter {
     ) -> Result<(), Exception> {
         if self.interpret_expr(condition).map(|t| self.to_bool(&t))? {
             self.interpret_item(if_item)?;
-        } else {
-            if let Some(item) = else_item {
-                self.interpret_item(item)?;
-            }
+        } else if let Some(item) = else_item {
+            self.interpret_item(item)?;
         }
 
         Ok(())
@@ -194,7 +192,7 @@ impl Interpreter {
             value,
             *self
                 .depths
-                .get(&ident)
+                .get(ident)
                 .ok_or_else(|| runtime_error(ErrorMsg::MisresolvedVar, &ident.name))?,
         )?;
         Ok(Type::Null)
@@ -214,7 +212,7 @@ impl Interpreter {
             &ident.name,
             *self
                 .depths
-                .get(&ident)
+                .get(ident)
                 .ok_or_else(|| runtime_error(ErrorMsg::MisresolvedVar, &ident.name))?,
         )
     }
@@ -240,7 +238,7 @@ impl Interpreter {
                         Type::Number(n + 1.0),
                         *self
                             .depths
-                            .get(&ident)
+                            .get(ident)
                             .ok_or_else(|| runtime_error(ErrorMsg::MisresolvedVar, &ident.name))?,
                     )?;
                     Ok(Type::Number(n + 1.0))
@@ -258,7 +256,7 @@ impl Interpreter {
                         Type::Number(n - 1.0),
                         *self
                             .depths
-                            .get(&ident)
+                            .get(ident)
                             .ok_or_else(|| runtime_error(ErrorMsg::MisresolvedVar, &ident.name))?,
                     )?;
                     Ok(Type::Number(n - 1.0))
@@ -377,7 +375,7 @@ impl Interpreter {
         let env = Env::with_parent(Rc::clone(&func.env));
         // Add the arguments to the function env
         for (ident, value) in func.args.iter().zip(args) {
-            env.borrow_mut().set(&ident, value.clone());
+            env.borrow_mut().set(ident, value.clone());
         }
         // If there is no error or return value, return null
         let Err(exception) = self.interpret_block(&func.body, env) else {
@@ -429,7 +427,7 @@ impl Interpreter {
     fn interpret_super(&self, super_: &Ident, method: &Ident) -> Result<Type, Exception> {
         let depth = self
             .depths
-            .get(&super_)
+            .get(super_)
             .ok_or_else(|| runtime_error(ErrorMsg::MisresolvedVar, &super_.name))?;
         let Type::Class(parent) = self.env.borrow().get_at_depth("super", *depth)? else {
             unreachable!("`super` cannot be a non-class type")
@@ -443,14 +441,14 @@ impl Interpreter {
         // Add `this` into a parent env for the function to access
         method.env = Env::with_parent(method.env);
         method.env.borrow_mut().set("this", Type::Instance(this));
-        return Ok(Type::Func(method));
+        Ok(Type::Func(method))
     }
 
     fn is_eq(&self, left: &Type, right: &Type) -> bool {
         match (left, right) {
             (Type::Number(m), Type::Number(n)) => m == n,
             (Type::Str(m), Type::Str(n)) => m == n,
-            _ => self.to_bool(&left) == self.to_bool(&right),
+            _ => self.to_bool(left) == self.to_bool(right),
         }
     }
 }

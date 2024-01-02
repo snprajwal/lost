@@ -27,7 +27,7 @@ impl<'a> Lexer<'a> {
     pub fn lex_all_sanitised(self) -> Result<Vec<Token>, Vec<Error>> {
         self.lex_all().map(|v| {
             v.into_iter()
-                .filter(|t| !matches!(t.kind, TokenKind::WHITESPACE | TokenKind::COMMENT))
+                .filter(|t| !matches!(t.kind, TokenKind::Whitespace | TokenKind::Comment))
                 .collect()
         })
     }
@@ -38,7 +38,7 @@ impl<'a> Lexer<'a> {
         loop {
             match self.lex() {
                 Ok(t) => {
-                    if t.kind == TokenKind::EOF {
+                    if t.kind == TokenKind::Eof {
                         break;
                     } else {
                         tokens.push(t);
@@ -59,18 +59,16 @@ impl<'a> Lexer<'a> {
         match self.advance() {
             Some(c) => {
                 match c {
-                    '!' => Ok(self.advance_if_or('=', TokenKind::BANG_EQUAL, TokenKind::BANG)),
-                    '=' => Ok(self.advance_if_or('=', TokenKind::EQUAL_EQUAL, TokenKind::EQUAL)),
-                    '>' => {
-                        Ok(self.advance_if_or('=', TokenKind::GREATER_EQUAL, TokenKind::GREATER))
-                    }
+                    '!' => Ok(self.advance_if_or('=', TokenKind::BangEqual, TokenKind::Bang)),
+                    '=' => Ok(self.advance_if_or('=', TokenKind::EqualEqual, TokenKind::Equal)),
+                    '>' => Ok(self.advance_if_or('=', TokenKind::GreaterEqual, TokenKind::Greater)),
                     '<' => Ok(if self.advance_if(|t| t == '=').is_some() {
-                        self.make_token(TokenKind::LESS_EQUAL)
+                        self.make_token(TokenKind::LessEqual)
                     } else {
-                        self.advance_if_or('-', TokenKind::INHERIT, TokenKind::LESS)
+                        self.advance_if_or('-', TokenKind::Inherit, TokenKind::Less)
                     }),
-                    '+' => Ok(self.advance_if_or('+', TokenKind::INCREMENT, TokenKind::PLUS)),
-                    '-' => Ok(self.advance_if_or('-', TokenKind::DECREMENT, TokenKind::MINUS)),
+                    '+' => Ok(self.advance_if_or('+', TokenKind::Increment, TokenKind::Plus)),
+                    '-' => Ok(self.advance_if_or('-', TokenKind::Decrement, TokenKind::Minus)),
                     '/' => Ok(self.lex_slash_or_comment()),
                     '"' => self.lex_string(),
                     _ => {
@@ -93,7 +91,7 @@ impl<'a> Lexer<'a> {
             _ => {
                 if self.start == self.source.len() {
                     Ok(Token::new(
-                        TokenKind::EOF,
+                        TokenKind::Eof,
                         TextRange {
                             start: self.current,
                             end: self.current,
@@ -113,7 +111,7 @@ impl<'a> Lexer<'a> {
         if let Some(t) = TokenKind::from_keyword(&self.lexeme_from_range()) {
             self.make_token(t)
         } else {
-            self.make_token(TokenKind::IDENT)
+            self.make_token(TokenKind::Ident)
         }
     }
 
@@ -128,7 +126,7 @@ impl<'a> Lexer<'a> {
                 return Err(self.error(ErrorMsg::UnexpectedChar));
             }
         }
-        Ok(self.make_token(TokenKind::NUMBER))
+        Ok(self.make_token(TokenKind::Number))
     }
 
     fn lex_string(&mut self) -> Result<Token, Error> {
@@ -139,7 +137,7 @@ impl<'a> Lexer<'a> {
                 return Err(self.error(ErrorMsg::UnterminatedString));
             }
         }
-        let token = self.make_token(TokenKind::STRING);
+        let token = self.make_token(TokenKind::Str);
         // Consume the closing apostrophe(")
         self.advance_if(|c| c == '"')
             .ok_or_else(|| self.error(ErrorMsg::UnterminatedString))?;
@@ -149,9 +147,9 @@ impl<'a> Lexer<'a> {
     fn lex_slash_or_comment(&mut self) -> Token {
         if self.advance_if(|c| c == '/').is_some() {
             self.advance_while(|c| c != '\n');
-            self.make_token(TokenKind::COMMENT)
+            self.make_token(TokenKind::Comment)
         } else {
-            self.make_token(TokenKind::SLASH)
+            self.make_token(TokenKind::Slash)
         }
     }
 
@@ -245,21 +243,21 @@ mod tests {
             or return super this true let while
             "#,
             vec![
-                (TokenKind::AND, "and"),
-                (TokenKind::CLASS, "class"),
-                (TokenKind::ELSE, "else"),
-                (TokenKind::FALSE, "false"),
-                (TokenKind::FN, "fn"),
-                (TokenKind::FOR, "for"),
-                (TokenKind::IF, "if"),
-                (TokenKind::NULL, "null"),
-                (TokenKind::OR, "or"),
-                (TokenKind::RETURN, "return"),
-                (TokenKind::SUPER, "super"),
-                (TokenKind::THIS, "this"),
-                (TokenKind::TRUE, "true"),
-                (TokenKind::LET, "let"),
-                (TokenKind::WHILE, "while"),
+                (TokenKind::And, "and"),
+                (TokenKind::Class, "class"),
+                (TokenKind::Else, "else"),
+                (TokenKind::False, "false"),
+                (TokenKind::Fn_, "fn"),
+                (TokenKind::For, "for"),
+                (TokenKind::If, "if"),
+                (TokenKind::Null, "null"),
+                (TokenKind::Or, "or"),
+                (TokenKind::Return, "return"),
+                (TokenKind::Super, "super"),
+                (TokenKind::This, "this"),
+                (TokenKind::True, "true"),
+                (TokenKind::Let, "let"),
+                (TokenKind::While, "while"),
             ],
         );
     }
@@ -269,11 +267,11 @@ mod tests {
         lex_test(
             "10 3.14 foo bar \"Hello there\"",
             vec![
-                (TokenKind::NUMBER, "10"),
-                (TokenKind::NUMBER, "3.14"),
-                (TokenKind::IDENT, "foo"),
-                (TokenKind::IDENT, "bar"),
-                (TokenKind::STRING, "Hello there"),
+                (TokenKind::Number, "10"),
+                (TokenKind::Number, "3.14"),
+                (TokenKind::Ident, "foo"),
+                (TokenKind::Ident, "bar"),
+                (TokenKind::Str, "Hello there"),
             ],
         );
     }
@@ -283,12 +281,12 @@ mod tests {
         lex_test(
             "< > <= >= == !=",
             vec![
-                (TokenKind::LESS, "<"),
-                (TokenKind::GREATER, ">"),
-                (TokenKind::LESS_EQUAL, "<="),
-                (TokenKind::GREATER_EQUAL, ">="),
-                (TokenKind::EQUAL_EQUAL, "=="),
-                (TokenKind::BANG_EQUAL, "!="),
+                (TokenKind::Less, "<"),
+                (TokenKind::Greater, ">"),
+                (TokenKind::LessEqual, "<="),
+                (TokenKind::GreaterEqual, ">="),
+                (TokenKind::EqualEqual, "=="),
+                (TokenKind::BangEqual, "!="),
             ],
         );
     }
@@ -298,12 +296,12 @@ mod tests {
         lex_test(
             "! + - * / =",
             vec![
-                (TokenKind::BANG, "!"),
-                (TokenKind::PLUS, "+"),
-                (TokenKind::MINUS, "-"),
-                (TokenKind::STAR, "*"),
-                (TokenKind::SLASH, "/"),
-                (TokenKind::EQUAL, "="),
+                (TokenKind::Bang, "!"),
+                (TokenKind::Plus, "+"),
+                (TokenKind::Minus, "-"),
+                (TokenKind::Star, "*"),
+                (TokenKind::Slash, "/"),
+                (TokenKind::Equal, "="),
             ],
         );
     }
@@ -313,13 +311,13 @@ mod tests {
         lex_test(
             ". , ; () {}",
             vec![
-                (TokenKind::DOT, "."),
-                (TokenKind::COMMA, ","),
-                (TokenKind::SEMICOLON, ";"),
-                (TokenKind::LPAREN, "("),
-                (TokenKind::RPAREN, ")"),
-                (TokenKind::LBRACE, "{"),
-                (TokenKind::RBRACE, "}"),
+                (TokenKind::Dot, "."),
+                (TokenKind::Comma, ","),
+                (TokenKind::Semicolon, ";"),
+                (TokenKind::LParen, "("),
+                (TokenKind::RParen, ")"),
+                (TokenKind::LBrace, "{"),
+                (TokenKind::RBrace, "}"),
             ],
         );
     }
@@ -329,10 +327,10 @@ mod tests {
         lex_test(
             " \t\r\n",
             vec![
-                (TokenKind::WHITESPACE, " "),
-                (TokenKind::WHITESPACE, "\t"),
-                (TokenKind::WHITESPACE, "\r"),
-                (TokenKind::WHITESPACE, "\n"),
+                (TokenKind::Whitespace, " "),
+                (TokenKind::Whitespace, "\t"),
+                (TokenKind::Whitespace, "\r"),
+                (TokenKind::Whitespace, "\n"),
             ],
         );
     }
@@ -341,7 +339,7 @@ mod tests {
     fn comment() {
         let input = "// Hello there";
         let token = Lexer::new(input).lex().unwrap();
-        assert_eq!(token.kind, TokenKind::COMMENT);
+        assert_eq!(token.kind, TokenKind::Comment);
         assert_eq!(token.lexeme, input);
     }
 
@@ -349,7 +347,7 @@ mod tests {
     fn eof() {
         let input = "";
         let token = Lexer::new(input).lex().unwrap();
-        assert_eq!(token.kind, TokenKind::EOF);
+        assert_eq!(token.kind, TokenKind::Eof);
         assert_eq!(token.lexeme, "end of file");
     }
 
@@ -387,7 +385,7 @@ mod tests {
         lexer.lex().unwrap();
         assert_eq!(
             lexer.lex().unwrap_err(),
-            format!("Lex error: {}", ErrorMsg::EndOfStream.to_string())
+            format!("Lex error: {}", ErrorMsg::EndOfStream)
         );
     }
 }

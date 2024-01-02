@@ -42,19 +42,20 @@ impl Env {
             debug!("Get {name} from parent");
             return parent.borrow().get(name);
         }
-        Err(runtime_error(ErrorMsg::UndefinedVar, &name))
+        Err(runtime_error(ErrorMsg::UndefinedVar, name))
     }
 
     pub fn assign(&mut self, name: &str, value: Type) -> Result<(), Exception> {
         debug!("Assign {name} -> {value:?})");
         if self.values.contains_key(name) {
-            return Ok(self.set(name, value));
+            self.set(name, value);
+            return Ok(());
         }
         if let Some(parent) = &mut self.parent {
             debug!("Assign {name} in parent");
             return parent.borrow_mut().assign(name, value);
         }
-        Err(runtime_error(ErrorMsg::UndefinedVar, &name))
+        Err(runtime_error(ErrorMsg::UndefinedVar, name))
     }
 
     pub fn get_at_depth(&self, name: &str, depth: usize) -> Result<Type, Exception> {
@@ -63,7 +64,7 @@ impl Env {
             if let Some(value) = self.values.get(name) {
                 return Ok(value.clone());
             }
-            return Err(runtime_error(ErrorMsg::MisresolvedVar, &name));
+            return Err(runtime_error(ErrorMsg::MisresolvedVar, name));
         }
         self.parent
             .as_ref()
@@ -81,9 +82,10 @@ impl Env {
         debug!("Set {name} -> {value} at depth {depth}");
         if depth == 0 {
             if self.values.contains_key(name) {
-                return Ok(self.set(name, value));
+                self.set(name, value);
+                return Ok(());
             }
-            return Err(runtime_error(ErrorMsg::MisresolvedVar, &name));
+            return Err(runtime_error(ErrorMsg::MisresolvedVar, name));
         }
         self.parent
             .as_ref()

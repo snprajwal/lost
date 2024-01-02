@@ -135,7 +135,7 @@ impl Callable for Class {
             fields: HashMap::default(),
             class: self.clone(),
         });
-        self.init(interpreter, &args, instance)
+        self.init(interpreter, args, instance)
     }
 }
 
@@ -190,7 +190,7 @@ impl Instance {
         }
         // The constructor must not be fetched or explicitly called
         if self.class.name == member {
-            return Err(runtime_error(ErrorMsg::GetConstructor, &member));
+            return Err(runtime_error(ErrorMsg::GetConstructor, member));
         }
         if let Some(mut func) = self.class.get_method(member) {
             // Add `this` into a parent env for the function to access
@@ -198,7 +198,7 @@ impl Instance {
             func.env.borrow_mut().set("this", Type::Instance(self));
             return Ok(Type::Func(func));
         }
-        Err(runtime_error(ErrorMsg::UndefinedMember, &member))
+        Err(runtime_error(ErrorMsg::UndefinedMember, member))
     }
 
     pub fn set(&mut self, field: &str, value: Type) -> Result<Type, Exception> {

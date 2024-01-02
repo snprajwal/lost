@@ -31,35 +31,35 @@ impl<'a> Parser<'a> {
             }
         }
 
-        errors.is_empty().then(|| Source { items }).ok_or(errors)
+        errors.is_empty().then_some(Source { items }).ok_or(errors)
     }
 
     pub fn parse_item(&mut self) -> Result<Item, Error> {
         match self.stream.peek() {
             Some(&t) => {
                 let item = match t.kind {
-                    TokenKind::LET => self.parse_let_stmt(),
-                    TokenKind::LBRACE => return self.parse_block(),
-                    TokenKind::IF => return self.parse_if_stmt(),
-                    TokenKind::WHILE => return self.parse_while_stmt(),
-                    TokenKind::FOR => return self.parse_for_stmt(),
-                    TokenKind::CLASS => return self.parse_class(),
-                    TokenKind::FN => return self.parse_function(),
-                    TokenKind::RETURN => return self.parse_return(),
+                    TokenKind::Let => self.parse_let_stmt(),
+                    TokenKind::LBrace => return self.parse_block(),
+                    TokenKind::If => return self.parse_if_stmt(),
+                    TokenKind::While => return self.parse_while_stmt(),
+                    TokenKind::For => return self.parse_for_stmt(),
+                    TokenKind::Class => return self.parse_class(),
+                    TokenKind::Fn_ => return self.parse_function(),
+                    TokenKind::Return => return self.parse_return(),
                     _ => self.parse_expr_stmt(),
                 }?;
-                self.advance_or_err(TokenKind::SEMICOLON, ErrorMsg::MissingSemicolon)?;
+                self.advance_or_err(TokenKind::Semicolon, ErrorMsg::MissingSemicolon)?;
                 Ok(item)
             }
-            None => return Err(format!("Parse error: {}", ErrorMsg::EndOfStream)),
+            None => Err(format!("Parse error: {}", ErrorMsg::EndOfStream)),
         }
     }
 
     fn parse_let_stmt(&mut self) -> Result<Item, Error> {
         // Consume the `let` keyword
         self.advance();
-        let name = self.advance_or_err(TokenKind::IDENT, ErrorMsg::ExpectedIdent)?;
-        let init = if self.advance_if(|t| t.kind == TokenKind::EQUAL).is_some() {
+        let name = self.advance_or_err(TokenKind::Ident, ErrorMsg::ExpectedIdent)?;
+        let init = if self.advance_if(|t| t.kind == TokenKind::Equal).is_some() {
             Some(self.parse_expr()?)
         } else {
             None
@@ -77,11 +77,11 @@ impl<'a> Parser<'a> {
     fn parse_if_stmt(&mut self) -> Result<Item, Error> {
         // Consume the `if` keyword
         self.advance();
-        self.advance_or_err(TokenKind::LPAREN, ErrorMsg::MissingOpeningParen)?;
+        self.advance_or_err(TokenKind::LParen, ErrorMsg::MissingOpeningParen)?;
         let condition = self.parse_expr()?;
-        self.advance_or_err(TokenKind::RPAREN, ErrorMsg::MissingClosingParen)?;
+        self.advance_or_err(TokenKind::RParen, ErrorMsg::MissingClosingParen)?;
         let if_item = self.parse_item()?;
-        let else_item = if self.advance_if(|t| t.kind == TokenKind::ELSE).is_some() {
+        let else_item = if self.advance_if(|t| t.kind == TokenKind::Else).is_some() {
             Some(Box::new(self.parse_item()?))
         } else {
             None
@@ -97,9 +97,9 @@ impl<'a> Parser<'a> {
     fn parse_while_stmt(&mut self) -> Result<Item, Error> {
         // Consume the `while` keyword
         self.advance();
-        self.advance_or_err(TokenKind::LPAREN, ErrorMsg::MissingOpeningParen)?;
+        self.advance_or_err(TokenKind::LParen, ErrorMsg::MissingOpeningParen)?;
         let condition = self.parse_expr()?;
-        self.advance_or_err(TokenKind::RPAREN, ErrorMsg::MissingClosingParen)?;
+        self.advance_or_err(TokenKind::RParen, ErrorMsg::MissingClosingParen)?;
 
         Ok(Item::WhileStmt {
             condition,
@@ -110,40 +110,40 @@ impl<'a> Parser<'a> {
     fn parse_for_stmt(&mut self) -> Result<Item, Error> {
         // Consume the `for` keyword
         self.advance();
-        self.advance_or_err(TokenKind::LPAREN, ErrorMsg::MissingOpeningParen)?;
+        self.advance_or_err(TokenKind::LParen, ErrorMsg::MissingOpeningParen)?;
         let init = match self.stream.peek() {
             Some(&t) => match t.kind {
-                TokenKind::SEMICOLON => None,
-                TokenKind::LET => Some(self.parse_let_stmt()?),
+                TokenKind::Semicolon => None,
+                TokenKind::Let => Some(self.parse_let_stmt()?),
                 _ => Some(self.parse_expr_stmt()?),
             },
             None => return Err(format!("Parse error: {}", ErrorMsg::EndOfStream)),
         };
-        self.advance_or_err(TokenKind::SEMICOLON, ErrorMsg::MissingSemicolon)?;
+        self.advance_or_err(TokenKind::Semicolon, ErrorMsg::MissingSemicolon)?;
 
         let condition = if self
             .stream
             .peek()
-            .filter(|t| t.kind == TokenKind::SEMICOLON)
+            .filter(|t| t.kind == TokenKind::Semicolon)
             .is_some()
         {
             Expr::Literal(Literal::Boolean(true))
         } else {
             self.parse_expr()?
         };
-        self.advance_or_err(TokenKind::SEMICOLON, ErrorMsg::MissingSemicolon)?;
+        self.advance_or_err(TokenKind::Semicolon, ErrorMsg::MissingSemicolon)?;
 
         let modifier = if self
             .stream
             .peek()
-            .filter(|t| t.kind == TokenKind::RPAREN)
+            .filter(|t| t.kind == TokenKind::RParen)
             .is_some()
         {
             None
         } else {
             Some(self.parse_expr()?)
         };
-        self.advance_or_err(TokenKind::RPAREN, ErrorMsg::MissingClosingParen)?;
+        self.advance_or_err(TokenKind::RParen, ErrorMsg::MissingClosingParen)?;
 
         let mut body = self.parse_item()?;
         // If the modifier is present, create
@@ -169,14 +169,14 @@ impl<'a> Parser<'a> {
     fn parse_class(&mut self) -> Result<Item, Error> {
         // Consume the `class` keyword
         self.advance();
-        let name = self.advance_or_err(TokenKind::IDENT, ErrorMsg::ExpectedIdent)?;
+        let name = self.advance_or_err(TokenKind::Ident, ErrorMsg::ExpectedIdent)?;
         let ident = Ident {
             name: name.lexeme.clone(),
             range: name.range,
         };
         // Consume the parent class, if any
-        let parent = if self.advance_if(|t| t.kind == TokenKind::INHERIT).is_some() {
-            let name = self.advance_or_err(TokenKind::IDENT, ErrorMsg::ExpectedParentClass)?;
+        let parent = if self.advance_if(|t| t.kind == TokenKind::Inherit).is_some() {
+            let name = self.advance_or_err(TokenKind::Ident, ErrorMsg::ExpectedParentClass)?;
             Some(Ident {
                 name: name.lexeme.clone(),
                 range: name.range,
@@ -184,17 +184,17 @@ impl<'a> Parser<'a> {
         } else {
             None
         };
-        self.advance_or_err(TokenKind::LBRACE, ErrorMsg::MissingOpeningBrace)?;
+        self.advance_or_err(TokenKind::LBrace, ErrorMsg::MissingOpeningBrace)?;
         let mut methods = vec![];
         while self
             .stream
             .peek()
-            .filter(|t| t.kind == TokenKind::RBRACE)
+            .filter(|t| t.kind == TokenKind::RBrace)
             .is_none()
         {
             methods.push(self.parse_function()?);
         }
-        self.advance_or_err(TokenKind::RBRACE, ErrorMsg::MissingClosingBrace)?;
+        self.advance_or_err(TokenKind::RBrace, ErrorMsg::MissingClosingBrace)?;
 
         Ok(Item::Class {
             ident,
@@ -206,31 +206,31 @@ impl<'a> Parser<'a> {
     fn parse_function(&mut self) -> Result<Item, Error> {
         // Consume the `fn` keyword
         self.advance();
-        let name = self.advance_or_err(TokenKind::IDENT, ErrorMsg::ExpectedIdent)?;
+        let name = self.advance_or_err(TokenKind::Ident, ErrorMsg::ExpectedIdent)?;
         let ident = Ident {
             name: name.lexeme.clone(),
             range: name.range,
         };
-        self.advance_or_err(TokenKind::LPAREN, ErrorMsg::MissingOpeningParen)?;
+        self.advance_or_err(TokenKind::LParen, ErrorMsg::MissingOpeningParen)?;
         let mut args = vec![];
         while self
             .stream
             .peek()
-            .filter(|t| t.kind == TokenKind::RPAREN)
+            .filter(|t| t.kind == TokenKind::RParen)
             .is_none()
         {
-            let name = self.advance_or_err(TokenKind::IDENT, ErrorMsg::ExpectedIdent)?;
+            let name = self.advance_or_err(TokenKind::Ident, ErrorMsg::ExpectedIdent)?;
             args.push(Ident {
                 name: name.lexeme.clone(),
                 range: name.range,
             });
-            if self.advance_if(|t| t.kind == TokenKind::COMMA).is_none() {
+            if self.advance_if(|t| t.kind == TokenKind::Comma).is_none() {
                 break;
             }
         }
-        self.advance_or_err(TokenKind::RPAREN, ErrorMsg::MissingClosingParen)?;
+        self.advance_or_err(TokenKind::RParen, ErrorMsg::MissingClosingParen)?;
         if let Some(&t) = self.stream.peek() {
-            if t.kind != TokenKind::LBRACE {
+            if t.kind != TokenKind::LBrace {
                 return Err(Self::error(t, ErrorMsg::MissingOpeningBrace));
             }
         }
@@ -245,13 +245,13 @@ impl<'a> Parser<'a> {
         // Consume the `return` keyword
         self.advance();
         if self
-            .advance_if(|t| t.kind == TokenKind::SEMICOLON)
+            .advance_if(|t| t.kind == TokenKind::Semicolon)
             .is_some()
         {
             return Ok(Item::ReturnStmt(Expr::Literal(Literal::Null)));
         }
         let value = self.parse_expr()?;
-        self.advance_or_err(TokenKind::SEMICOLON, ErrorMsg::MissingSemicolon)?;
+        self.advance_or_err(TokenKind::Semicolon, ErrorMsg::MissingSemicolon)?;
 
         Ok(Item::ReturnStmt(value))
     }
@@ -265,7 +265,7 @@ impl<'a> Parser<'a> {
         // Consume the opening brace
         self.advance();
         while let Some(&t) = self.stream.peek() {
-            if matches!(t.kind, TokenKind::RBRACE) {
+            if matches!(t.kind, TokenKind::RBrace) {
                 break;
             }
             items.push(self.parse_item()?);
@@ -273,7 +273,7 @@ impl<'a> Parser<'a> {
 
         match self.stream.peek() {
             Some(&t) => {
-                if t.kind == TokenKind::RBRACE {
+                if t.kind == TokenKind::RBrace {
                     // Consume the closing brace
                     self.advance();
                     Ok(Item::Block(items))
@@ -294,7 +294,7 @@ impl<'a> Parser<'a> {
         let Some(eq) = (if self
             .stream
             .peek()
-            .filter(|&&t| t.kind == TokenKind::EQUAL)
+            .filter(|&&t| t.kind == TokenKind::Equal)
             .is_some()
         {
             self.stream.next()
@@ -339,7 +339,7 @@ impl<'a> Parser<'a> {
 
     fn parse_logical_or(&mut self) -> Result<Expr, Error> {
         let mut lhs = self.parse_logical_and()?;
-        while self.advance_if(|t| t.kind == TokenKind::OR).is_some() {
+        while self.advance_if(|t| t.kind == TokenKind::Or).is_some() {
             let rhs = self.parse_logical_and()?;
             lhs = Expr::Logical {
                 lhs: Box::new(lhs),
@@ -352,7 +352,7 @@ impl<'a> Parser<'a> {
 
     fn parse_logical_and(&mut self) -> Result<Expr, Error> {
         let mut lhs = self.parse_eq()?;
-        while self.advance_if(|t| t.kind == TokenKind::AND).is_some() {
+        while self.advance_if(|t| t.kind == TokenKind::And).is_some() {
             let rhs = self.parse_eq()?;
             lhs = Expr::Logical {
                 lhs: Box::new(lhs),
@@ -366,7 +366,7 @@ impl<'a> Parser<'a> {
     fn parse_eq(&mut self) -> Result<Expr, Error> {
         let mut lhs = self.parse_cmp()?;
         while let Some(op) =
-            self.advance_if(|t| matches!(t.kind, TokenKind::EQUAL_EQUAL | TokenKind::BANG_EQUAL))
+            self.advance_if(|t| matches!(t.kind, TokenKind::EqualEqual | TokenKind::BangEqual))
         {
             let bin_op = ast::BinOp::from_token(op.kind);
             let rhs = self.parse_cmp()?;
@@ -384,10 +384,10 @@ impl<'a> Parser<'a> {
         while let Some(op) = self.advance_if(|t| {
             matches!(
                 t.kind,
-                TokenKind::GREATER
-                    | TokenKind::GREATER_EQUAL
-                    | TokenKind::LESS
-                    | TokenKind::LESS_EQUAL
+                TokenKind::Greater
+                    | TokenKind::GreaterEqual
+                    | TokenKind::Less
+                    | TokenKind::LessEqual
             )
         }) {
             let bin_op = ast::BinOp::from_token(op.kind);
@@ -406,7 +406,7 @@ impl<'a> Parser<'a> {
         while let Some(op) = self.advance_if(|t| {
             matches!(
                 t.kind,
-                TokenKind::PLUS | TokenKind::MINUS | TokenKind::MODULO
+                TokenKind::Plus | TokenKind::Minus | TokenKind::Modulo
             )
         }) {
             let bin_op = ast::BinOp::from_token(op.kind);
@@ -423,7 +423,7 @@ impl<'a> Parser<'a> {
     fn parse_factor(&mut self) -> Result<Expr, Error> {
         let mut lhs = self.parse_unary()?;
         while let Some(op) =
-            self.advance_if(|t| matches!(t.kind, TokenKind::SLASH | TokenKind::STAR))
+            self.advance_if(|t| matches!(t.kind, TokenKind::Slash | TokenKind::Star))
         {
             let bin_op = ast::BinOp::from_token(op.kind);
             let rhs = self.parse_unary()?;
@@ -440,7 +440,7 @@ impl<'a> Parser<'a> {
         let expr = if let Some(op) = self.advance_if(|t| {
             matches!(
                 t.kind,
-                TokenKind::BANG | TokenKind::MINUS | TokenKind::INCREMENT | TokenKind::DECREMENT
+                TokenKind::Bang | TokenKind::Minus | TokenKind::Increment | TokenKind::Decrement
             )
         }) {
             Expr::Unary {
@@ -459,29 +459,29 @@ impl<'a> Parser<'a> {
         loop {
             let Some(t) = self.stream.peek() else { break };
             match t.kind {
-                TokenKind::LPAREN => {
+                TokenKind::LParen => {
                     // Consume the opening parenthesis
                     self.advance();
                     let mut args = vec![];
-                    if self.advance_if(|t| t.kind == TokenKind::RPAREN).is_none() {
+                    if self.advance_if(|t| t.kind == TokenKind::RParen).is_none() {
                         loop {
                             args.push(self.parse_expr()?);
-                            if self.advance_if(|t| t.kind == TokenKind::COMMA).is_none() {
+                            if self.advance_if(|t| t.kind == TokenKind::Comma).is_none() {
                                 break;
                             }
                         }
                         // Consume the closing parenthesis
-                        self.advance_or_err(TokenKind::RPAREN, ErrorMsg::MissingClosingParen)?;
+                        self.advance_or_err(TokenKind::RParen, ErrorMsg::MissingClosingParen)?;
                     }
                     expr = Expr::Call {
                         func: Box::new(expr),
                         args,
                     };
                 }
-                TokenKind::DOT => {
+                TokenKind::Dot => {
                     // Consume the dot
                     self.advance();
-                    let name = self.advance_or_err(TokenKind::IDENT, ErrorMsg::ExpectedIdent)?;
+                    let name = self.advance_or_err(TokenKind::Ident, ErrorMsg::ExpectedIdent)?;
                     expr = Expr::FieldGet {
                         object: Box::new(expr),
                         field: Ident {
@@ -500,26 +500,26 @@ impl<'a> Parser<'a> {
     fn parse_primary(&mut self) -> Result<Expr, Error> {
         let lit = match self.advance() {
             Some(t) => match t.kind {
-                TokenKind::TRUE => Literal::Boolean(true),
-                TokenKind::FALSE => Literal::Boolean(false),
-                TokenKind::NULL => Literal::Null,
-                TokenKind::NUMBER => {
+                TokenKind::True => Literal::Boolean(true),
+                TokenKind::False => Literal::Boolean(false),
+                TokenKind::Null => Literal::Null,
+                TokenKind::Number => {
                     Literal::Number(t.lexeme.parse().expect("failed to parse number"))
                 }
-                TokenKind::STRING => Literal::Str(t.lexeme.clone()),
-                TokenKind::LPAREN => return self.parse_group(),
-                TokenKind::IDENT | TokenKind::THIS => {
+                TokenKind::Str => Literal::Str(t.lexeme.clone()),
+                TokenKind::LParen => return self.parse_group(),
+                TokenKind::Ident | TokenKind::This => {
                     return Ok(Expr::Ident(Ident {
                         name: t.lexeme.clone(),
                         range: t.range,
                     }))
                 }
-                TokenKind::SUPER => {
+                TokenKind::Super => {
                     let super_ = t.clone();
                     return self
-                        .advance_or_err(TokenKind::DOT, ErrorMsg::ExpectedMethod)
+                        .advance_or_err(TokenKind::Dot, ErrorMsg::ExpectedMethod)
                         .and_then(|_| {
-                            self.advance_or_err(TokenKind::IDENT, ErrorMsg::ExpectedMethod)
+                            self.advance_or_err(TokenKind::Ident, ErrorMsg::ExpectedMethod)
                         })
                         .map(|t| {
                             Expr::Super(
@@ -544,9 +544,9 @@ impl<'a> Parser<'a> {
     fn parse_group(&mut self) -> Result<Expr, Error> {
         let expr = self.parse_expr()?;
         if let Some(t) = self.stream.peek() {
-            if t.kind == TokenKind::RPAREN {
+            if t.kind == TokenKind::RParen {
                 self.advance();
-                return Ok(Expr::Group(Box::new(expr)));
+                Ok(Expr::Group(Box::new(expr)))
             } else {
                 Err(Self::error(t, ErrorMsg::MissingClosingParen))
             }
@@ -585,7 +585,7 @@ impl<'a> Parser<'a> {
 
     fn sync(&mut self) {
         if self
-            .advance_if(|t| t.kind == TokenKind::SEMICOLON)
+            .advance_if(|t| t.kind == TokenKind::Semicolon)
             .is_some()
         {
             return;
@@ -596,13 +596,13 @@ impl<'a> Parser<'a> {
             .filter(|t| {
                 !matches!(
                     t.kind,
-                    TokenKind::CLASS
-                        | TokenKind::FN
-                        | TokenKind::LET
-                        | TokenKind::FOR
-                        | TokenKind::IF
-                        | TokenKind::WHILE
-                        | TokenKind::RETURN
+                    TokenKind::Class
+                        | TokenKind::Fn_
+                        | TokenKind::Let
+                        | TokenKind::For
+                        | TokenKind::If
+                        | TokenKind::While
+                        | TokenKind::Return
                 )
             })
             .is_some()

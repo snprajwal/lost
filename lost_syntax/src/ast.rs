@@ -48,10 +48,10 @@ pub enum UnaryOp {
 impl UnaryOp {
     pub fn from_token(t: TokenKind) -> Self {
         match t {
-            TokenKind::BANG => Self::Bang,
-            TokenKind::MINUS => Self::Minus,
-            TokenKind::INCREMENT => Self::Increment,
-            TokenKind::DECREMENT => Self::Decrement,
+            TokenKind::Bang => Self::Bang,
+            TokenKind::Minus => Self::Minus,
+            TokenKind::Increment => Self::Increment,
+            TokenKind::Decrement => Self::Decrement,
             _ => unreachable!("non-unary operator cannot be passed to this function"),
         }
     }
@@ -93,17 +93,17 @@ impl Display for BinOp {
 impl BinOp {
     pub fn from_token(t: TokenKind) -> Self {
         match t {
-            TokenKind::SLASH => Self::Slash,
-            TokenKind::STAR => Self::Star,
-            TokenKind::PLUS => Self::Plus,
-            TokenKind::MINUS => Self::Minus,
-            TokenKind::MODULO => Self::Modulo,
-            TokenKind::GREATER => Self::Greater,
-            TokenKind::GREATER_EQUAL => Self::GreaterEqual,
-            TokenKind::LESS => Self::Less,
-            TokenKind::LESS_EQUAL => Self::LessEqual,
-            TokenKind::BANG_EQUAL => Self::BangEqual,
-            TokenKind::EQUAL_EQUAL => Self::EqualEqual,
+            TokenKind::Slash => Self::Slash,
+            TokenKind::Star => Self::Star,
+            TokenKind::Plus => Self::Plus,
+            TokenKind::Minus => Self::Minus,
+            TokenKind::Modulo => Self::Modulo,
+            TokenKind::Greater => Self::Greater,
+            TokenKind::GreaterEqual => Self::GreaterEqual,
+            TokenKind::Less => Self::Less,
+            TokenKind::LessEqual => Self::LessEqual,
+            TokenKind::BangEqual => Self::BangEqual,
+            TokenKind::EqualEqual => Self::EqualEqual,
             _ => unreachable!("non-binary operator cannot be passed to this function"),
         }
     }
@@ -118,8 +118,8 @@ pub enum LogicalOp {
 impl LogicalOp {
     pub fn from_token(t: TokenKind) -> Option<Self> {
         let op = match t {
-            TokenKind::AND => Self::And,
-            TokenKind::OR => Self::Or,
+            TokenKind::And => Self::And,
+            TokenKind::Or => Self::Or,
             _ => return None,
         };
         Some(op)
