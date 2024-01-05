@@ -4,17 +4,17 @@ use std::{
 };
 
 use crate::{
-    environment::Env,
-    types::{
-        self,
-        Type::{self, NativeFunc},
+    environment::{
+        Env,
+        Value::{self, NativeFunc},
     },
+    types,
 };
 
 /// Initialises the environment with stdlib functions
 /// at the global level for the interpreter.
 pub fn init(env: &mut Env) {
-    let fns: [(&str, Type); 2] = [
+    let fns: [(&str, Value); 2] = [
         (
             "print",
             NativeFunc(types::NativeFunc {
@@ -22,7 +22,7 @@ pub fn init(env: &mut Env) {
                 args: vec!["arg".to_string()],
                 body: |_, args| {
                     println!("{}", args[0]);
-                    Ok(Type::Null)
+                    Ok(Value::Null)
                 },
             }),
         ),
@@ -32,7 +32,7 @@ pub fn init(env: &mut Env) {
                 name: "clock".to_string(),
                 args: vec![],
                 body: |_, _| {
-                    Ok(Type::Number(
+                    Ok(Value::Number(
                         time::SystemTime::now()
                             .duration_since(UNIX_EPOCH)
                             .expect("failed to calculate time")

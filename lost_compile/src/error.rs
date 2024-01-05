@@ -1,11 +1,11 @@
 use std::fmt::Display;
 
-use crate::types::Type;
+use crate::environment::Value;
 
 #[derive(Debug)]
 pub enum Exception {
     Error(String),
-    Return(Type),
+    Return(Value),
 }
 
 impl Display for Exception {

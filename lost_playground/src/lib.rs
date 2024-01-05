@@ -1,7 +1,12 @@
 mod stdlib;
 
 use crate::stdlib::init;
-use lost_compile::{environment::Env, interpret::Interpreter, resolve::Resolver, run, types::Type};
+use lost_compile::{
+    environment::{Env, Value},
+    interpret::Interpreter,
+    resolve::Resolver,
+    run,
+};
 use std::env;
 use wasm_bindgen::prelude::*;
 
@@ -43,7 +48,7 @@ impl World {
         // Initialise output variable. This is a hack
         // to print to JS since stdout itself can't be
         // captured and piped into a JS value.
-        env.set(REPL_OUTPUT_VAR, Type::Str(String::default()));
+        env.set(REPL_OUTPUT_VAR, Value::Str(String::default()));
         // Add stdlib functions
         init(&mut env);
 
@@ -79,6 +84,6 @@ fn clear_output(interpreter: &Interpreter) {
     interpreter
         .env
         .borrow_mut()
-        .assign_at_depth(REPL_OUTPUT_VAR, Type::Str(String::default()), 0)
+        .assign_at_depth(REPL_OUTPUT_VAR, Value::Str(String::default()), 0)
         .expect("no output variable present");
 }

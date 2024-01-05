@@ -1,9 +1,9 @@
 use std::{cell::RefCell, cmp::Ordering, collections::HashMap, rc::Rc};
 
 use crate::{
-    environment::Env,
+    environment::{Env, Value},
     error::{runtime_error, ErrorMsg, Exception},
-    types::{Callable, Class, Func, Type},
+    types::{Callable, Class, Func},
 };
 use lost_syntax::ast::{BinOp, Expr, Ident, Item, Literal, LogicalOp, Source, UnaryOp};
 
@@ -60,7 +60,7 @@ impl Interpreter {
     fn interpret_let_stmt(&mut self, ident: &Ident, init: &Option<Expr>) -> Result<(), Exception> {
         let value = match init {
             Some(expr) => self.interpret_expr(expr)?,
-            None => Type::Null,
+            None => Value::Null,
         };
         self.env.borrow_mut().set(&ident.name, value);
         Ok(())
@@ -104,7 +104,7 @@ impl Interpreter {
         body: &[Item],
     ) -> Result<(), Exception> {
         let func = self.create_function(ident, args, body);
-        self.env.borrow_mut().set(&ident.name, Type::Func(func));
+        self.env.borrow_mut().set(&ident.name, Value::Func(func));
         Ok(())
     }
 
@@ -125,7 +125,7 @@ impl Interpreter {
         methods: &[Item],
     ) -> Result<(), Exception> {
         let (old_env, parent_class) = if let Some(p) = parent {
-            let t @ Type::Class(c) = &self.interpret_ident(p)? else {
+            let t @ Value::Class(c) = &self.interpret_ident(p)? else {
                 return Err(runtime_error(ErrorMsg::ExpectedClass, &p.name));
             };
             // Create a new parent env with the parent class
@@ -152,7 +152,7 @@ impl Interpreter {
 
         self.env.borrow_mut().set(
             &ident.name,
-            Type::Class(Class {
+            Value::Class(Class {
                 name: ident.name.clone(),
                 parent: parent_class,
                 methods: method_map,
@@ -165,7 +165,7 @@ impl Interpreter {
         Err(Exception::Return(self.interpret_expr(expr)?))
     }
 
-    fn interpret_expr(&mut self, expr: &Expr) -> Result<Type, Exception> {
+    fn interpret_expr(&mut self, expr: &Expr) -> Result<Value, Exception> {
         match expr {
             Expr::Assignment { name, value } => self.interpret_assignment(name, value),
             Expr::Literal(lit) => self.interpret_literal(lit),
@@ -185,7 +185,7 @@ impl Interpreter {
         }
     }
 
-    fn interpret_assignment(&mut self, ident: &Ident, expr: &Expr) -> Result<Type, Exception> {
+    fn interpret_assignment(&mut self, ident: &Ident, expr: &Expr) -> Result<Value, Exception> {
         let value = self.interpret_expr(expr)?;
         self.env.borrow_mut().assign_at_depth(
             &ident.name,
@@ -195,19 +195,19 @@ impl Interpreter {
                 .get(ident)
                 .ok_or_else(|| runtime_error(ErrorMsg::MisresolvedVar, &ident.name))?,
         )?;
-        Ok(Type::Null)
+        Ok(Value::Null)
     }
 
-    fn interpret_literal(&mut self, lit: &Literal) -> Result<Type, Exception> {
+    fn interpret_literal(&mut self, lit: &Literal) -> Result<Value, Exception> {
         Ok(match lit.to_owned() {
-            Literal::Str(s) => Type::Str(s),
-            Literal::Number(n) => Type::Number(n),
-            Literal::Boolean(b) => Type::Boolean(b),
-            Literal::Null => Type::Null,
+            Literal::Str(s) => Value::Str(s),
+            Literal::Number(n) => Value::Number(n),
+            Literal::Boolean(b) => Value::Boolean(b),
+            Literal::Null => Value::Null,
         })
     }
 
-    fn interpret_ident(&mut self, ident: &Ident) -> Result<Type, Exception> {
+    fn interpret_ident(&mut self, ident: &Ident) -> Result<Value, Exception> {
         self.env.borrow().get_at_depth(
             &ident.name,
             *self
@@ -217,31 +217,31 @@ impl Interpreter {
         )
     }
 
-    fn interpret_unary(&mut self, op: &UnaryOp, expr: &Expr) -> Result<Type, Exception> {
+    fn interpret_unary(&mut self, op: &UnaryOp, expr: &Expr) -> Result<Value, Exception> {
         let lit = self.interpret_expr(expr)?;
         match op {
             UnaryOp::Minus => {
-                if let Type::Number(n) = lit {
-                    Ok(Type::Number(-n))
+                if let Value::Number(n) = lit {
+                    Ok(Value::Number(-n))
                 } else {
                     Err(runtime_error(ErrorMsg::ExpectedNumber, &lit.to_string()))
                 }
             }
-            UnaryOp::Bang => Ok(Type::Boolean(!self.to_bool(&lit))),
+            UnaryOp::Bang => Ok(Value::Boolean(!self.to_bool(&lit))),
             UnaryOp::Increment => {
                 let Expr::Ident(ident) = expr else {
                     return Err(runtime_error(ErrorMsg::ExpectedIdent, &lit.to_string()));
                 };
-                if let Type::Number(n) = lit {
+                if let Value::Number(n) = lit {
                     self.env.borrow_mut().assign_at_depth(
                         &ident.name,
-                        Type::Number(n + 1.0),
+                        Value::Number(n + 1.0),
                         *self
                             .depths
                             .get(ident)
                             .ok_or_else(|| runtime_error(ErrorMsg::MisresolvedVar, &ident.name))?,
                     )?;
-                    Ok(Type::Number(n + 1.0))
+                    Ok(Value::Number(n + 1.0))
                 } else {
                     Err(runtime_error(ErrorMsg::ExpectedNumber, &lit.to_string()))
                 }
@@ -250,16 +250,16 @@ impl Interpreter {
                 let Expr::Ident(ident) = expr else {
                     return Err(runtime_error(ErrorMsg::ExpectedIdent, &lit.to_string()));
                 };
-                if let Type::Number(n) = lit {
+                if let Value::Number(n) = lit {
                     self.env.borrow_mut().assign_at_depth(
                         &ident.name,
-                        Type::Number(n - 1.0),
+                        Value::Number(n - 1.0),
                         *self
                             .depths
                             .get(ident)
                             .ok_or_else(|| runtime_error(ErrorMsg::MisresolvedVar, &ident.name))?,
                     )?;
-                    Ok(Type::Number(n - 1.0))
+                    Ok(Value::Number(n - 1.0))
                 } else {
                     Err(runtime_error(ErrorMsg::ExpectedNumber, &lit.to_string()))
                 }
@@ -267,10 +267,10 @@ impl Interpreter {
         }
     }
 
-    fn to_bool(&self, lit: &Type) -> bool {
+    fn to_bool(&self, lit: &Value) -> bool {
         match lit {
-            Type::Null => false,
-            Type::Boolean(b) => *b,
+            Value::Null => false,
+            Value::Boolean(b) => *b,
             _ => true,
         }
     }
@@ -280,7 +280,7 @@ impl Interpreter {
         lhs: &Expr,
         op: &LogicalOp,
         rhs: &Expr,
-    ) -> Result<Type, Exception> {
+    ) -> Result<Value, Exception> {
         let left = self.interpret_expr(lhs)?;
         match (op, self.to_bool(&left)) {
             (LogicalOp::Or, true) | (LogicalOp::And, false) => Ok(left),
@@ -288,15 +288,15 @@ impl Interpreter {
         }
     }
 
-    fn interpret_binary(&mut self, lhs: &Expr, op: &BinOp, rhs: &Expr) -> Result<Type, Exception> {
+    fn interpret_binary(&mut self, lhs: &Expr, op: &BinOp, rhs: &Expr) -> Result<Value, Exception> {
         let left = self.interpret_expr(lhs)?;
         let right = self.interpret_expr(rhs)?;
 
         // Handle string concatenation
-        if let Type::Str(left_str) = left {
+        if let Value::Str(left_str) = left {
             if op == &BinOp::Plus {
-                if let Type::Str(right_str) = right {
-                    return Ok(Type::Str(left_str + &right_str));
+                if let Value::Str(right_str) = right {
+                    return Ok(Value::Str(left_str + &right_str));
                 }
                 return Err(runtime_error(
                     ErrorMsg::ExpectedNumOrStr,
@@ -308,43 +308,43 @@ impl Interpreter {
 
         // Handle == and !=
         if op == &BinOp::EqualEqual {
-            return Ok(Type::Boolean(self.is_eq(&left, &right)));
+            return Ok(Value::Boolean(self.is_eq(&left, &right)));
         }
         if op == &BinOp::BangEqual {
-            return Ok(Type::Boolean(!(self.is_eq(&left, &right))));
+            return Ok(Value::Boolean(!(self.is_eq(&left, &right))));
         }
 
         // All other comparisons can be performed only on numbers.
         // It might be possible to perform them across types, but
         // that gives the user a gun to shoot their foot with, and
         // is hence not implemented. No numero, no bueno ;)
-        let Type::Number(left_num) = left else {
+        let Value::Number(left_num) = left else {
             return Err(runtime_error(ErrorMsg::ExpectedNumber, &left.to_string()));
         };
-        let Type::Number(right_num) = right else {
+        let Value::Number(right_num) = right else {
             return Err(runtime_error(ErrorMsg::ExpectedNumber, &right.to_string()));
         };
 
         Ok(match op {
-            BinOp::Plus => Type::Number(left_num + right_num),
-            BinOp::Minus => Type::Number(left_num - right_num),
-            BinOp::Star => Type::Number(left_num * right_num),
-            BinOp::Modulo => Type::Number(left_num % right_num),
-            BinOp::Slash => Type::Number(left_num / right_num),
-            BinOp::Greater => Type::Boolean(left_num > right_num),
-            BinOp::GreaterEqual => Type::Boolean(left_num >= right_num),
-            BinOp::Less => Type::Boolean(left_num < right_num),
-            BinOp::LessEqual => Type::Boolean(left_num <= right_num),
+            BinOp::Plus => Value::Number(left_num + right_num),
+            BinOp::Minus => Value::Number(left_num - right_num),
+            BinOp::Star => Value::Number(left_num * right_num),
+            BinOp::Modulo => Value::Number(left_num % right_num),
+            BinOp::Slash => Value::Number(left_num / right_num),
+            BinOp::Greater => Value::Boolean(left_num > right_num),
+            BinOp::GreaterEqual => Value::Boolean(left_num >= right_num),
+            BinOp::Less => Value::Boolean(left_num < right_num),
+            BinOp::LessEqual => Value::Boolean(left_num <= right_num),
             _ => unreachable!("non-binary operators cannot be stored in this variable"),
         })
     }
 
-    fn interpret_call(&mut self, fn_expr: &Expr, arg_exprs: &[Expr]) -> Result<Type, Exception> {
+    fn interpret_call(&mut self, fn_expr: &Expr, arg_exprs: &[Expr]) -> Result<Value, Exception> {
         let ty = self.interpret_expr(fn_expr)?;
         let func: Box<dyn Callable> = match ty {
-            Type::Func(f) => Box::new(f),
-            Type::NativeFunc(f) => Box::new(f),
-            Type::Class(c) => Box::new(c),
+            Value::Func(f) => Box::new(f),
+            Value::NativeFunc(f) => Box::new(f),
+            Value::Class(c) => Box::new(c),
             _ => return Err(runtime_error(ErrorMsg::InvalidCall, &ty.to_string())),
         };
         // Ensure the number of arguments matches the function definition
@@ -371,7 +371,7 @@ impl Interpreter {
         func.call(self, &args)
     }
 
-    pub(crate) fn call(&mut self, func: &Func, args: &[Type]) -> Result<Type, Exception> {
+    pub(crate) fn call(&mut self, func: &Func, args: &[Value]) -> Result<Value, Exception> {
         let env = Env::with_parent(Rc::clone(&func.env));
         // Add the arguments to the function env
         for (ident, value) in func.args.iter().zip(args) {
@@ -379,20 +379,19 @@ impl Interpreter {
         }
         // If there is no error or return value, return null
         let Err(exception) = self.interpret_block(&func.body, env) else {
-            return Ok(Type::Null);
+            return Ok(Value::Null);
         };
         // If the exception is a return value, propagate
-        // it as an `Ok` value with the return type, else
-        // return the error itself
+        // it as `Ok`, else return the error itself
         match exception {
             Exception::Return(val) => Ok(val),
             Exception::Error(_) => Err(exception),
         }
     }
 
-    fn interpret_field_get(&mut self, object: &Expr, field: &Ident) -> Result<Type, Exception> {
+    fn interpret_field_get(&mut self, object: &Expr, field: &Ident) -> Result<Value, Exception> {
         let ty = self.interpret_expr(object)?;
-        let Type::Instance(instance) = ty else {
+        let Value::Instance(instance) = ty else {
             return Err(runtime_error(ErrorMsg::ExpectedObject, &ty.to_string()));
         };
         instance.get(&field.name)
@@ -403,51 +402,51 @@ impl Interpreter {
         object: &Expr,
         field: &Ident,
         expr: &Expr,
-    ) -> Result<Type, Exception> {
+    ) -> Result<Value, Exception> {
         let Expr::Ident(ident) = &object else {
             unreachable!("non-identifiers cannot be passed to this function");
         };
         let ty = self.interpret_expr(object)?;
-        let Type::Instance(mut instance) = ty else {
+        let Value::Instance(mut instance) = ty else {
             return Err(runtime_error(ErrorMsg::ExpectedObject, &ty.to_string()));
         };
         let value = self.interpret_expr(expr)?;
         instance.set(&field.name, value)?;
         self.env.borrow_mut().assign_at_depth(
             &ident.name,
-            Type::Instance(instance),
+            Value::Instance(instance),
             *self
                 .depths
                 .get(ident)
                 .ok_or_else(|| runtime_error(ErrorMsg::MisresolvedVar, &ident.name))?,
         )?;
-        Ok(Type::Null)
+        Ok(Value::Null)
     }
 
-    fn interpret_super(&self, super_: &Ident, method: &Ident) -> Result<Type, Exception> {
+    fn interpret_super(&self, super_: &Ident, method: &Ident) -> Result<Value, Exception> {
         let depth = self
             .depths
             .get(super_)
             .ok_or_else(|| runtime_error(ErrorMsg::MisresolvedVar, &super_.name))?;
-        let Type::Class(parent) = self.env.borrow().get_at_depth("super", *depth)? else {
-            unreachable!("`super` cannot be a non-class type")
+        let Value::Class(parent) = self.env.borrow().get_at_depth("super", *depth)? else {
+            unreachable!("`super` cannot be a non-class value")
         };
-        let Type::Instance(this) = self.env.borrow().get_at_depth("this", *depth - 1)? else {
-            unreachable!("`this` cannot be a non-instance type")
+        let Value::Instance(this) = self.env.borrow().get_at_depth("this", *depth - 1)? else {
+            unreachable!("`this` cannot be a non-instance value")
         };
         let Some(mut method) = parent.get_method(&method.name) else {
             return Err(runtime_error(ErrorMsg::UndefinedMethod, &method.name));
         };
         // Add `this` into a parent env for the function to access
         method.env = Env::with_parent(method.env);
-        method.env.borrow_mut().set("this", Type::Instance(this));
-        Ok(Type::Func(method))
+        method.env.borrow_mut().set("this", Value::Instance(this));
+        Ok(Value::Func(method))
     }
 
-    fn is_eq(&self, left: &Type, right: &Type) -> bool {
+    fn is_eq(&self, left: &Value, right: &Value) -> bool {
         match (left, right) {
-            (Type::Number(m), Type::Number(n)) => m == n,
-            (Type::Str(m), Type::Str(n)) => m == n,
+            (Value::Number(m), Value::Number(n)) => m == n,
+            (Value::Str(m), Value::Str(n)) => m == n,
             _ => self.to_bool(left) == self.to_bool(right),
         }
     }
@@ -471,7 +470,7 @@ mod tests {
         assert!(interpreter.interpret_let_stmt(&name, &init).is_ok());
         assert_eq!(
             interpreter.env.borrow().get_at_depth(&var, 0).unwrap(),
-            Type::Number(5.0)
+            Value::Number(5.0)
         );
     }
 
@@ -530,18 +529,18 @@ mod tests {
 
         // Number literal
         let result = interpreter.interpret_expr(&Expr::Literal(Literal::Number(10.5)));
-        assert_eq!(result.unwrap(), Type::Number(10.5));
+        assert_eq!(result.unwrap(), Value::Number(10.5));
 
         // Boolean literal
         let result = interpreter.interpret_expr(&Expr::Literal(Literal::Boolean(true)));
-        assert_eq!(result.unwrap(), Type::Boolean(true));
+        assert_eq!(result.unwrap(), Value::Boolean(true));
 
         // String literal
         let result = interpreter.interpret_expr(&Expr::Literal(Literal::Str("hello".to_string())));
-        assert_eq!(result.unwrap(), Type::Str("hello".to_string()));
+        assert_eq!(result.unwrap(), Value::Str("hello".to_string()));
 
         // Identifier
-        interpreter.env.borrow_mut().set("x", Type::Number(5.0));
+        interpreter.env.borrow_mut().set("x", Value::Number(5.0));
         interpreter.depths.insert(
             Ident {
                 name: "x".to_string(),
@@ -553,21 +552,21 @@ mod tests {
             name: "x".to_string(),
             range: TextRange { start: 0, end: 0 },
         }));
-        assert_eq!(result.unwrap(), Type::Number(5.0));
+        assert_eq!(result.unwrap(), Value::Number(5.0));
 
         // Unary minus
         let result = interpreter.interpret_expr(&Expr::Unary {
             op: UnaryOp::Minus,
             expr: Box::new(Expr::Literal(Literal::Number(10.0))),
         });
-        assert_eq!(result.unwrap(), Type::Number(-10.0));
+        assert_eq!(result.unwrap(), Value::Number(-10.0));
 
         // Unary bang
         let result = interpreter.interpret_expr(&Expr::Unary {
             op: UnaryOp::Bang,
             expr: Box::new(Expr::Literal(Literal::Boolean(false))),
         });
-        assert_eq!(result.unwrap(), Type::Boolean(true));
+        assert_eq!(result.unwrap(), Value::Boolean(true));
 
         // Addition
         let result = interpreter.interpret_expr(&Expr::Binary {
@@ -575,7 +574,7 @@ mod tests {
             op: BinOp::Plus,
             rhs: Box::new(Expr::Literal(Literal::Number(20.0))),
         });
-        assert_eq!(result.unwrap(), Type::Number(30.0));
+        assert_eq!(result.unwrap(), Value::Number(30.0));
 
         // String concatenation
         let result = interpreter.interpret_expr(&Expr::Binary {
@@ -583,7 +582,7 @@ mod tests {
             op: BinOp::Plus,
             rhs: Box::new(Expr::Literal(Literal::Str("world".to_string()))),
         });
-        assert_eq!(result.unwrap(), Type::Str("helloworld".to_string()));
+        assert_eq!(result.unwrap(), Value::Str("helloworld".to_string()));
 
         // Equality
         let result = interpreter.interpret_expr(&Expr::Binary {
@@ -591,7 +590,7 @@ mod tests {
             op: BinOp::EqualEqual,
             rhs: Box::new(Expr::Literal(Literal::Number(10.0))),
         });
-        assert_eq!(result.unwrap(), Type::Boolean(true));
+        assert_eq!(result.unwrap(), Value::Boolean(true));
 
         // Logical and
         let result = interpreter.interpret_expr(&Expr::Logical {
@@ -599,7 +598,7 @@ mod tests {
             op: LogicalOp::And,
             rhs: Box::new(Expr::Literal(Literal::Number(20.0))),
         });
-        assert_eq!(result.unwrap(), Type::Number(20.0));
+        assert_eq!(result.unwrap(), Value::Number(20.0));
 
         // Logical or
         let result = interpreter.interpret_expr(&Expr::Logical {
@@ -607,7 +606,7 @@ mod tests {
             op: LogicalOp::Or,
             rhs: Box::new(Expr::Literal(Literal::Number(20.0))),
         });
-        assert_eq!(result.unwrap(), Type::Number(10.0));
+        assert_eq!(result.unwrap(), Value::Number(10.0));
 
         // Inequality
         let result = interpreter.interpret_expr(&Expr::Binary {
@@ -615,6 +614,6 @@ mod tests {
             op: BinOp::BangEqual,
             rhs: Box::new(Expr::Literal(Literal::Number(20.0))),
         });
-        assert_eq!(result.unwrap(), Type::Boolean(true));
+        assert_eq!(result.unwrap(), Value::Boolean(true));
     }
 }

@@ -18,7 +18,7 @@ impl<'a> Lexer<'a> {
         Self {
             source: source.to_string(),
             stream: source.chars().peekable(),
-            line: 0,
+            line: 1,
             start: 0,
             current: 0,
         }
@@ -212,7 +212,7 @@ impl<'a> Lexer<'a> {
     fn error(&self, msg: ErrorMsg) -> Error {
         format!(
             "Lex error at line {}: {} {}",
-            self.line + 1,
+            self.line,
             msg,
             self.lexeme_from_range()
         )

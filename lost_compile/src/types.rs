@@ -8,41 +8,14 @@ use std::{
 use lost_syntax::ast::Item;
 
 use crate::{
-    environment::Env,
+    environment::{Env, Value},
     error::{runtime_error, ErrorMsg, Exception},
     interpret::Interpreter,
 };
 
-#[derive(Clone, Debug, PartialEq)]
-pub enum Type {
-    Boolean(bool),
-    Number(f64),
-    Str(String),
-    Func(Func),
-    NativeFunc(NativeFunc),
-    Class(Class),
-    Instance(Instance),
-    Null,
-}
-
-impl Display for Type {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str(&match self {
-            Self::Boolean(b) => b.to_string(),
-            Self::Number(n) => n.to_string(),
-            Self::Str(s) => s.to_owned(),
-            Self::Func(f) => f.to_string(),
-            Self::NativeFunc(f) => f.to_string(),
-            Self::Class(c) => c.to_string(),
-            Self::Instance(i) => i.to_string(),
-            Self::Null => "null".to_string(),
-        })
-    }
-}
-
 pub trait Callable {
     fn arity(&self) -> usize;
-    fn call(&self, interpreter: &mut Interpreter, args: &[Type]) -> Result<Type, Exception>;
+    fn call(&self, interpreter: &mut Interpreter, args: &[Value]) -> Result<Value, Exception>;
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -63,7 +36,7 @@ impl Callable for Func {
     fn arity(&self) -> usize {
         self.args.len()
     }
-    fn call(&self, interpreter: &mut Interpreter, args: &[Type]) -> Result<Type, Exception> {
+    fn call(&self, interpreter: &mut Interpreter, args: &[Value]) -> Result<Value, Exception> {
         interpreter.call(self, args)
     }
 }
@@ -72,7 +45,7 @@ impl Callable for Func {
 pub struct NativeFunc {
     pub name: String,
     pub args: Vec<String>,
-    pub body: fn(&mut Interpreter, &[Type]) -> Result<Type, Exception>,
+    pub body: fn(&mut Interpreter, &[Value]) -> Result<Value, Exception>,
 }
 
 impl PartialEq for NativeFunc {
@@ -104,7 +77,7 @@ impl Callable for NativeFunc {
     fn arity(&self) -> usize {
         self.args.len()
     }
-    fn call(&self, interpreter: &mut Interpreter, args: &[Type]) -> Result<Type, Exception> {
+    fn call(&self, interpreter: &mut Interpreter, args: &[Value]) -> Result<Value, Exception> {
         (self.body)(interpreter, args)
     }
 }
@@ -130,8 +103,8 @@ impl Callable for Class {
             0
         }
     }
-    fn call(&self, interpreter: &mut Interpreter, args: &[Type]) -> Result<Type, Exception> {
-        let instance = Type::Instance(Instance {
+    fn call(&self, interpreter: &mut Interpreter, args: &[Value]) -> Result<Value, Exception> {
+        let instance = Value::Instance(Instance {
             fields: HashMap::default(),
             class: self.clone(),
         });
@@ -150,9 +123,9 @@ impl Class {
     fn init(
         &self,
         interpreter: &mut Interpreter,
-        args: &[Type],
-        instance: Type,
-    ) -> Result<Type, Exception> {
+        args: &[Value],
+        instance: Value,
+    ) -> Result<Value, Exception> {
         let initialised = if let Some(p) = &self.parent {
             p.init(interpreter, args, instance)?
         } else {
@@ -174,7 +147,7 @@ impl Class {
 #[derive(Clone, Debug, PartialEq)]
 pub struct Instance {
     pub class: Class,
-    fields: HashMap<String, Type>,
+    fields: HashMap<String, Value>,
 }
 
 impl Display for Instance {
@@ -184,7 +157,7 @@ impl Display for Instance {
 }
 
 impl Instance {
-    pub fn get(self, member: &str) -> Result<Type, Exception> {
+    pub fn get(self, member: &str) -> Result<Value, Exception> {
         if let Some(value) = self.fields.get(member) {
             return Ok(value.clone());
         }
@@ -195,13 +168,13 @@ impl Instance {
         if let Some(mut func) = self.class.get_method(member) {
             // Add `this` into a parent env for the function to access
             func.env = Env::with_parent(func.env);
-            func.env.borrow_mut().set("this", Type::Instance(self));
-            return Ok(Type::Func(func));
+            func.env.borrow_mut().set("this", Value::Instance(self));
+            return Ok(Value::Func(func));
         }
         Err(runtime_error(ErrorMsg::UndefinedMember, member))
     }
 
-    pub fn set(&mut self, field: &str, value: Type) -> Result<Type, Exception> {
+    pub fn set(&mut self, field: &str, value: Value) -> Result<Value, Exception> {
         self.fields.insert(field.to_string(), value.clone());
         Ok(value)
     }
