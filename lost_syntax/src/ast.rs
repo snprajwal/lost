@@ -191,5 +191,8 @@ pub enum Expr {
         field: Ident,
         value: Box<Expr>,
     },
-    Super(Ident, Ident),
+    Super {
+        super_: Ident,
+        method: Ident,
+    },
 }

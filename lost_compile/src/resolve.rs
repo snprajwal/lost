@@ -187,7 +187,7 @@ impl Resolver {
             Expr::FieldSet { object, value, .. } => self
                 .resolve_expr(object)
                 .and_then(|_| self.resolve_expr(value)),
-            Expr::Super(super_, _) => self.resolve_ident(super_),
+            Expr::Super { super_, .. } => self.resolve_ident(super_),
         }
     }
 

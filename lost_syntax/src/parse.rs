@@ -309,22 +309,11 @@ impl<'a> Parser<'a> {
                 name: ident,
                 value: Box::new(rhs),
             }),
-            Expr::FieldGet { object, field } => {
-                Ok(Expr::FieldSet {
-                    object,
-                    field,
-                    value: Box::new(rhs),
-                })
-                // } else {
-                //     // The error is manually generated as there is
-                //     // no single token for the lvalue identifier
-                //     Err(format!(
-                //         "Parse error at line {}: {}",
-                //         eq.line + 1,
-                //         ErrorMsg::InvalidField,
-                //     ))
-                // }
-            }
+            Expr::FieldGet { object, field } => Ok(Expr::FieldSet {
+                object,
+                field,
+                value: Box::new(rhs),
+            }),
             _ => {
                 // The error is manually generated as there is
                 // no single token for the lvalue identifier
@@ -521,17 +510,15 @@ impl<'a> Parser<'a> {
                         .and_then(|_| {
                             self.advance_or_err(TokenKind::Ident, ErrorMsg::ExpectedMethod)
                         })
-                        .map(|t| {
-                            Expr::Super(
-                                Ident {
-                                    name: super_.lexeme.clone(),
-                                    range: super_.range,
-                                },
-                                Ident {
-                                    name: t.lexeme.clone(),
-                                    range: t.range,
-                                },
-                            )
+                        .map(|t| Expr::Super {
+                            super_: Ident {
+                                name: super_.lexeme.clone(),
+                                range: super_.range,
+                            },
+                            method: Ident {
+                                name: t.lexeme.clone(),
+                                range: t.range,
+                            },
                         });
                 }
                 _ => return Err(Self::error(t, ErrorMsg::UnexpectedToken)),

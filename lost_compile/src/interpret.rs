@@ -72,7 +72,7 @@ impl Interpreter {
         if_item: &Item,
         else_item: &Option<Box<Item>>,
     ) -> Result<(), Exception> {
-        if self.interpret_expr(condition).map(|t| self.to_bool(&t))? {
+        if self.interpret_expr(condition).map(|t| to_bool(&t))? {
             self.interpret_item(if_item)?;
         } else if let Some(item) = else_item {
             self.interpret_item(item)?;
@@ -82,7 +82,7 @@ impl Interpreter {
     }
 
     fn interpret_while_stmt(&mut self, condition: &Expr, body: &Item) -> Result<(), Exception> {
-        while self.interpret_expr(condition).map(|t| self.to_bool(&t))? {
+        while self.interpret_expr(condition).map(|t| to_bool(&t))? {
             self.interpret_item(body)?;
         }
 
@@ -181,7 +181,7 @@ impl Interpreter {
                 field,
                 value,
             } => self.interpret_field_set(object, field, value),
-            Expr::Super(super_, method) => self.interpret_super(super_, method),
+            Expr::Super { super_, method } => self.interpret_super(super_, method),
         }
     }
 
@@ -227,7 +227,7 @@ impl Interpreter {
                     Err(runtime_error(ErrorMsg::ExpectedNumber, &lit.to_string()))
                 }
             }
-            UnaryOp::Bang => Ok(Value::Boolean(!self.to_bool(&lit))),
+            UnaryOp::Bang => Ok(Value::Boolean(!to_bool(&lit))),
             UnaryOp::Increment => {
                 let Expr::Ident(ident) = expr else {
                     return Err(runtime_error(ErrorMsg::ExpectedIdent, &lit.to_string()));
@@ -267,14 +267,6 @@ impl Interpreter {
         }
     }
 
-    fn to_bool(&self, lit: &Value) -> bool {
-        match lit {
-            Value::Null => false,
-            Value::Boolean(b) => *b,
-            _ => true,
-        }
-    }
-
     fn interpret_logical(
         &mut self,
         lhs: &Expr,
@@ -282,7 +274,7 @@ impl Interpreter {
         rhs: &Expr,
     ) -> Result<Value, Exception> {
         let left = self.interpret_expr(lhs)?;
-        match (op, self.to_bool(&left)) {
+        match (op, to_bool(&left)) {
             (LogicalOp::Or, true) | (LogicalOp::And, false) => Ok(left),
             _ => self.interpret_expr(rhs),
         }
@@ -308,10 +300,10 @@ impl Interpreter {
 
         // Handle == and !=
         if op == &BinOp::EqualEqual {
-            return Ok(Value::Boolean(self.is_eq(&left, &right)));
+            return Ok(Value::Boolean(is_eq(&left, &right)));
         }
         if op == &BinOp::BangEqual {
-            return Ok(Value::Boolean(!(self.is_eq(&left, &right))));
+            return Ok(Value::Boolean(!(is_eq(&left, &right))));
         }
 
         // All other comparisons can be performed only on numbers.
@@ -442,13 +434,21 @@ impl Interpreter {
         method.env.borrow_mut().set("this", Value::Instance(this));
         Ok(Value::Func(method))
     }
+}
 
-    fn is_eq(&self, left: &Value, right: &Value) -> bool {
-        match (left, right) {
-            (Value::Number(m), Value::Number(n)) => m == n,
-            (Value::Str(m), Value::Str(n)) => m == n,
-            _ => self.to_bool(left) == self.to_bool(right),
-        }
+fn to_bool(v: &Value) -> bool {
+    match v {
+        Value::Null => false,
+        Value::Boolean(b) => *b,
+        _ => true,
+    }
+}
+
+fn is_eq(left: &Value, right: &Value) -> bool {
+    match (left, right) {
+        (Value::Number(m), Value::Number(n)) => m == n,
+        (Value::Str(m), Value::Str(n)) => m == n,
+        _ => to_bool(left) == to_bool(right),
     }
 }
 
