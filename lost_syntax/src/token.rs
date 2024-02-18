@@ -1,12 +1,14 @@
 use std::{fmt::Display, ops::AddAssign};
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
-pub struct TextRange {
+pub struct Location {
     pub start: usize,
     pub end: usize,
+    pub line: usize,
+    pub column: usize,
 }
 
-impl AddAssign for TextRange {
+impl AddAssign for Location {
     fn add_assign(&mut self, rhs: Self) {
         self.start += rhs.start;
         self.end += rhs.end;
@@ -115,8 +117,7 @@ impl TokenKind {
 #[derive(Clone, Debug)]
 pub struct Token {
     pub kind: TokenKind,
-    pub range: TextRange,
-    pub line: usize,
+    pub loc: Location,
     pub lexeme: String,
 }
 
@@ -127,12 +128,7 @@ impl Display for Token {
 }
 
 impl Token {
-    pub fn new(kind: TokenKind, range: TextRange, line: usize, lexeme: String) -> Self {
-        Self {
-            kind,
-            range,
-            line,
-            lexeme,
-        }
+    pub fn new(kind: TokenKind, loc: Location, lexeme: String) -> Self {
+        Self { kind, loc, lexeme }
     }
 }

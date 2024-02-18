@@ -1,5 +1,7 @@
 use std::fmt::Display;
 
+use crate::token::Token;
+
 pub type Error = String;
 
 #[derive(Debug)]
@@ -42,4 +44,15 @@ impl Display for ErrorMsg {
             Self::EndOfStream => "end of stream",
         })
     }
+}
+
+pub fn parse_error(token: &Token, msg: ErrorMsg) -> Error {
+    format!(
+        "Parse error ({}:{}): {} {}",
+        token.loc.line, token.loc.column, msg, token
+    )
+}
+
+pub fn parse_error_eof(msg: ErrorMsg) -> Error {
+    format!("Parse error: {} {}", msg, ErrorMsg::EndOfStream)
 }

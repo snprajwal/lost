@@ -1,6 +1,6 @@
 use crate::{
     error::{Error, ErrorMsg},
-    token::{TextRange, Token, TokenKind},
+    token::{Location, Token, TokenKind},
 };
 use std::{iter::Peekable, str::Chars};
 
@@ -8,9 +8,10 @@ use std::{iter::Peekable, str::Chars};
 pub struct Lexer<'a> {
     source: String,
     stream: Peekable<Chars<'a>>,
-    line: usize,
     start: usize,
     current: usize,
+    line: usize,
+    column: usize,
 }
 
 impl<'a> Lexer<'a> {
@@ -18,9 +19,10 @@ impl<'a> Lexer<'a> {
         Self {
             source: source.to_string(),
             stream: source.chars().peekable(),
-            line: 1,
             start: 0,
             current: 0,
+            line: 1,
+            column: 0,
         }
     }
 
@@ -40,9 +42,8 @@ impl<'a> Lexer<'a> {
                 Ok(t) => {
                     if t.kind == TokenKind::Eof {
                         break;
-                    } else {
-                        tokens.push(t);
                     }
+                    tokens.push(t);
                 }
                 Err(e) => errors.push(e),
             }
@@ -76,6 +77,7 @@ impl<'a> Lexer<'a> {
                             // If it is a newline, increment the current line count
                             if c == '\n' {
                                 self.line += 1;
+                                self.column = 0;
                             }
                             Ok(self.make_token(t))
                         } else if c.is_ascii_alphabetic() {
@@ -92,12 +94,13 @@ impl<'a> Lexer<'a> {
                 if self.start == self.source.len() {
                     Ok(Token::new(
                         TokenKind::Eof,
-                        TextRange {
+                        Location {
                             start: self.current,
                             end: self.current,
+                            line: self.line,
+                            column: self.column,
                         },
-                        self.line,
-                        "end of file".to_string(),
+                        "EOF".to_string(),
                     ))
                 } else {
                     Err(format!("Lex error: {}", ErrorMsg::EndOfStream))
@@ -154,22 +157,25 @@ impl<'a> Lexer<'a> {
     }
 
     fn make_token(&self, kind: TokenKind) -> Token {
-        Token::new(kind, self.text_range(), self.line, self.lexeme_from_range())
+        Token::new(kind, self.location(), self.lexeme_from_range())
     }
 
     fn lexeme_from_range(&self) -> String {
         self.source[self.start..self.current].to_string()
     }
 
-    fn text_range(&self) -> TextRange {
-        TextRange {
+    fn location(&self) -> Location {
+        Location {
             start: self.start,
             end: self.current,
+            line: self.line,
+            column: self.column,
         }
     }
 
     fn advance(&mut self) -> Option<char> {
         self.current += 1;
+        self.column += 1;
         self.stream.next()
     }
 
@@ -211,8 +217,9 @@ impl<'a> Lexer<'a> {
 
     fn error(&self, msg: ErrorMsg) -> Error {
         format!(
-            "Lex error at line {}: {} {}",
+            "Lex error ({}:{}): {} {}",
             self.line,
+            self.column,
             msg,
             self.lexeme_from_range()
         )
@@ -348,7 +355,7 @@ mod tests {
         let input = "";
         let token = Lexer::new(input).lex().unwrap();
         assert_eq!(token.kind, TokenKind::Eof);
-        assert_eq!(token.lexeme, "end of file");
+        assert_eq!(token.lexeme, "EOF");
     }
 
     #[test]
@@ -359,7 +366,7 @@ mod tests {
         lexer.lex().unwrap();
         assert_eq!(
             lexer.lex().unwrap_err(),
-            format!("Lex error at line 1: {} @", ErrorMsg::UnexpectedChar)
+            format!("Lex error (1:3): {} @", ErrorMsg::UnexpectedChar)
         );
     }
 
@@ -370,7 +377,7 @@ mod tests {
         assert_eq!(
             err,
             format!(
-                "Lex error at line 1: {} {}",
+                "Lex error (1:12): {} {}",
                 ErrorMsg::UnterminatedString,
                 &input[1..]
             )

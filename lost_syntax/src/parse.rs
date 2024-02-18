@@ -2,7 +2,7 @@ use std::{iter::Peekable, slice::Iter};
 
 use crate::{
     ast::{self, Expr, Ident, Item, Literal, Source},
-    error::{Error, ErrorMsg},
+    error::{parse_error, parse_error_eof, Error, ErrorMsg},
     token::{Token, TokenKind},
 };
 
@@ -68,7 +68,7 @@ impl<'a> Parser<'a> {
         Ok(Item::LetStmt {
             ident: Ident {
                 name: name.lexeme.clone(),
-                range: name.range,
+                loc: name.loc,
             },
             init,
         })
@@ -172,14 +172,14 @@ impl<'a> Parser<'a> {
         let name = self.advance_or_err(TokenKind::Ident, ErrorMsg::ExpectedIdent)?;
         let ident = Ident {
             name: name.lexeme.clone(),
-            range: name.range,
+            loc: name.loc,
         };
         // Consume the parent class, if any
         let parent = if self.advance_if(|t| t.kind == TokenKind::Inherit).is_some() {
             let name = self.advance_or_err(TokenKind::Ident, ErrorMsg::ExpectedParentClass)?;
             Some(Ident {
                 name: name.lexeme.clone(),
-                range: name.range,
+                loc: name.loc,
             })
         } else {
             None
@@ -209,7 +209,7 @@ impl<'a> Parser<'a> {
         let name = self.advance_or_err(TokenKind::Ident, ErrorMsg::ExpectedIdent)?;
         let ident = Ident {
             name: name.lexeme.clone(),
-            range: name.range,
+            loc: name.loc,
         };
         self.advance_or_err(TokenKind::LParen, ErrorMsg::MissingOpeningParen)?;
         let mut args = vec![];
@@ -222,7 +222,7 @@ impl<'a> Parser<'a> {
             let name = self.advance_or_err(TokenKind::Ident, ErrorMsg::ExpectedIdent)?;
             args.push(Ident {
                 name: name.lexeme.clone(),
-                range: name.range,
+                loc: name.loc,
             });
             if self.advance_if(|t| t.kind == TokenKind::Comma).is_none() {
                 break;
@@ -231,7 +231,7 @@ impl<'a> Parser<'a> {
         self.advance_or_err(TokenKind::RParen, ErrorMsg::MissingClosingParen)?;
         if let Some(&t) = self.stream.peek() {
             if t.kind != TokenKind::LBrace {
-                return Err(Self::error(t, ErrorMsg::MissingOpeningBrace));
+                return Err(parse_error(t, ErrorMsg::MissingOpeningBrace));
             }
         }
         let Item::Block(body) = self.parse_block()? else {
@@ -278,10 +278,10 @@ impl<'a> Parser<'a> {
                     self.advance();
                     Ok(Item::Block(items))
                 } else {
-                    Err(Self::error(t, ErrorMsg::MissingClosingBrace))
+                    Err(parse_error(t, ErrorMsg::MissingClosingBrace))
                 }
             }
-            None => Err(Self::eof_error(ErrorMsg::MissingClosingBrace)),
+            None => Err(parse_error_eof(ErrorMsg::MissingClosingBrace)),
         }
     }
 
@@ -319,7 +319,7 @@ impl<'a> Parser<'a> {
                 // no single token for the lvalue identifier
                 Err(format!(
                     "Parse error at line {}: {}",
-                    eq.line + 1,
+                    eq.loc.line,
                     ErrorMsg::InvalidAssignment,
                 ))
             }
@@ -475,7 +475,7 @@ impl<'a> Parser<'a> {
                         object: Box::new(expr),
                         field: Ident {
                             name: name.lexeme.clone(),
-                            range: name.range,
+                            loc: name.loc,
                         },
                     }
                 }
@@ -500,7 +500,7 @@ impl<'a> Parser<'a> {
                 TokenKind::Ident | TokenKind::This => {
                     return Ok(Expr::Ident(Ident {
                         name: t.lexeme.clone(),
-                        range: t.range,
+                        loc: t.loc,
                     }))
                 }
                 TokenKind::Super => {
@@ -513,15 +513,15 @@ impl<'a> Parser<'a> {
                         .map(|t| Expr::Super {
                             super_: Ident {
                                 name: super_.lexeme.clone(),
-                                range: super_.range,
+                                loc: super_.loc,
                             },
                             method: Ident {
                                 name: t.lexeme.clone(),
-                                range: t.range,
+                                loc: t.loc,
                             },
                         });
                 }
-                _ => return Err(Self::error(t, ErrorMsg::UnexpectedToken)),
+                _ => return Err(parse_error(t, ErrorMsg::UnexpectedToken)),
             },
             None => return Err(format!("Parse error: {}", ErrorMsg::EndOfStream)),
         };
@@ -535,10 +535,10 @@ impl<'a> Parser<'a> {
                 self.advance();
                 Ok(Expr::Group(Box::new(expr)))
             } else {
-                Err(Self::error(t, ErrorMsg::MissingClosingParen))
+                Err(parse_error(t, ErrorMsg::MissingClosingParen))
             }
         } else {
-            Err(Self::eof_error(ErrorMsg::MissingClosingParen))
+            Err(parse_error_eof(ErrorMsg::MissingClosingParen))
         }
     }
 
@@ -563,10 +563,10 @@ impl<'a> Parser<'a> {
                 self.advance();
                 Ok(t.clone())
             } else {
-                Err(Self::error(t, msg))
+                Err(parse_error(t, msg))
             }
         } else {
-            Err(Self::eof_error(msg))
+            Err(parse_error_eof(msg))
         }
     }
 
@@ -597,20 +597,12 @@ impl<'a> Parser<'a> {
             self.advance();
         }
     }
-
-    fn error(token: &Token, msg: ErrorMsg) -> Error {
-        format!("Parse error at line {}: {} {}", token.line + 1, msg, token)
-    }
-
-    fn eof_error(msg: ErrorMsg) -> Error {
-        format!("Parse error: {} {}", msg, ErrorMsg::EndOfStream)
-    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{lex::Lexer, token::TextRange};
+    use crate::{lex::Lexer, token::Location};
 
     fn parse_test(input: &str, expected: Source) {
         let tokens = Lexer::new(input).lex_all_sanitised().unwrap();
@@ -635,7 +627,12 @@ mod tests {
                 items: vec![Item::LetStmt {
                     ident: Ident {
                         name: "x".to_owned(),
-                        range: TextRange { start: 4, end: 5 },
+                        loc: Location {
+                            start: 4,
+                            end: 5,
+                            line: 1,
+                            column: 5,
+                        },
                     },
                     init: Some(Expr::Literal(Literal::Number(42.0))),
                 }],
@@ -696,7 +693,12 @@ mod tests {
                     Item::LetStmt {
                         ident: Ident {
                             name: var.clone(),
-                            range: TextRange { start: 9, end: 10 },
+                            loc: Location {
+                                start: 9,
+                                end: 10,
+                                line: 1,
+                                column: 10,
+                            },
                         },
                         init: Some(Expr::Literal(Literal::Number(0.0))),
                     },
@@ -704,7 +706,12 @@ mod tests {
                         condition: Expr::Binary {
                             lhs: Box::new(Expr::Ident(Ident {
                                 name: var.clone(),
-                                range: TextRange { start: 16, end: 17 },
+                                loc: Location {
+                                    start: 16,
+                                    end: 17,
+                                    line: 1,
+                                    column: 17,
+                                },
                             })),
                             op: ast::BinOp::Less,
                             rhs: Box::new(Expr::Literal(Literal::Number(5.0))),
@@ -712,17 +719,32 @@ mod tests {
                         body: Box::new(Item::Block(vec![
                             Item::Block(vec![Item::ExprStmt(Expr::Ident(Ident {
                                 name: var.clone(),
-                                range: TextRange { start: 36, end: 37 },
+                                loc: Location {
+                                    start: 36,
+                                    end: 37,
+                                    line: 1,
+                                    column: 37,
+                                },
                             }))]),
                             Item::ExprStmt(Expr::Assignment {
                                 name: Ident {
                                     name: var.clone(),
-                                    range: TextRange { start: 23, end: 24 },
+                                    loc: Location {
+                                        start: 23,
+                                        end: 24,
+                                        line: 1,
+                                        column: 24,
+                                    },
                                 },
                                 value: Box::new(Expr::Binary {
                                     lhs: Box::new(Expr::Ident(Ident {
                                         name: var.clone(),
-                                        range: TextRange { start: 27, end: 28 },
+                                        loc: Location {
+                                            start: 27,
+                                            end: 28,
+                                            line: 1,
+                                            column: 28,
+                                        },
                                     })),
                                     op: ast::BinOp::Plus,
                                     rhs: Box::new(Expr::Literal(Literal::Number(1.0))),
@@ -744,14 +766,24 @@ mod tests {
                     Item::LetStmt {
                         ident: Ident {
                             name: "x".to_owned(),
-                            range: TextRange { start: 6, end: 7 },
+                            loc: Location {
+                                start: 6,
+                                end: 7,
+                                line: 1,
+                                column: 7,
+                            },
                         },
                         init: Some(Expr::Literal(Literal::Number(1.0))),
                     },
                     Item::LetStmt {
                         ident: Ident {
                             name: "y".to_owned(),
-                            range: TextRange { start: 17, end: 18 },
+                            loc: Location {
+                                start: 17,
+                                end: 18,
+                                line: 1,
+                                column: 18,
+                            },
                         },
                         init: Some(Expr::Literal(Literal::Number(2.0))),
                     },
@@ -790,7 +822,7 @@ mod tests {
     fn missing_closing_paren() {
         parse_err_test(
             "(1 + 2 * 3;",
-            format!("Parse error at line 1: {} ;", ErrorMsg::MissingClosingParen).as_str(),
+            format!("Parse error (1:11): {} ;", ErrorMsg::MissingClosingParen).as_str(),
         );
     }
 

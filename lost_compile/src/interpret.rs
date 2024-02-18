@@ -454,7 +454,7 @@ fn is_eq(left: &Value, right: &Value) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use lost_syntax::{ast::Ident, token::TextRange};
+    use lost_syntax::{ast::Ident, token::Location};
 
     use super::*;
 
@@ -464,7 +464,12 @@ mod tests {
         let var = "x".to_string();
         let name = Ident {
             name: var.clone(),
-            range: TextRange { start: 0, end: 0 },
+            loc: Location {
+                start: 0,
+                end: 0,
+                line: 1,
+                column: 1,
+            },
         };
         let init = Some(Expr::Literal(Literal::Number(5.0)));
         assert!(interpreter.interpret_let_stmt(&name, &init).is_ok());
@@ -502,19 +507,34 @@ mod tests {
             Item::LetStmt {
                 ident: Ident {
                     name: "x".to_string(),
-                    range: TextRange { start: 0, end: 0 },
+                    loc: Location {
+                        start: 0,
+                        end: 0,
+                        line: 1,
+                        column: 1,
+                    },
                 },
                 init: Some(Expr::Literal(Literal::Number(5.0))),
             },
             Item::Block(vec![Item::ExprStmt(Expr::Ident(Ident {
                 name: "x".to_string(),
-                range: TextRange { start: 0, end: 0 },
+                loc: Location {
+                    start: 0,
+                    end: 0,
+                    line: 1,
+                    column: 1,
+                },
             }))]),
         ];
         interpreter.depths.insert(
             Ident {
                 name: "x".to_string(),
-                range: TextRange { start: 0, end: 0 },
+                loc: Location {
+                    start: 0,
+                    end: 0,
+                    line: 1,
+                    column: 1,
+                },
             },
             1,
         );
@@ -544,13 +564,23 @@ mod tests {
         interpreter.depths.insert(
             Ident {
                 name: "x".to_string(),
-                range: TextRange { start: 0, end: 0 },
+                loc: Location {
+                    start: 0,
+                    end: 0,
+                    line: 1,
+                    column: 1,
+                },
             },
             0,
         );
         let result = interpreter.interpret_expr(&Expr::Ident(Ident {
             name: "x".to_string(),
-            range: TextRange { start: 0, end: 0 },
+            loc: Location {
+                start: 0,
+                end: 0,
+                line: 1,
+                column: 1,
+            },
         }));
         assert_eq!(result.unwrap(), Value::Number(5.0));
 

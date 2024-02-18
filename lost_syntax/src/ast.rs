@@ -1,6 +1,6 @@
 use std::{fmt::Display, hash::Hash};
 
-use crate::token::{TextRange, TokenKind};
+use crate::token::{Location, TokenKind};
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct Source {
@@ -35,6 +35,73 @@ pub enum Item {
     },
     ReturnStmt(Expr),
     Block(Vec<Item>),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct Ident {
+    pub name: String,
+    pub loc: Location,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub enum Literal {
+    Number(f64),
+    Str(String),
+    Boolean(bool),
+    Null,
+}
+
+impl Display for Literal {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&match self {
+            Self::Number(n) => n.to_string(),
+            Self::Str(s) => s.to_owned(),
+            Self::Boolean(b) => b.to_string(),
+            Self::Null => "null".to_string(),
+        })
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub enum Expr {
+    Assignment {
+        name: Ident,
+        value: Box<Expr>,
+    },
+    Ident(Ident),
+    Literal(Literal),
+    Unary {
+        op: UnaryOp,
+        expr: Box<Expr>,
+    },
+    Binary {
+        lhs: Box<Expr>,
+        op: BinOp,
+        rhs: Box<Expr>,
+    },
+    Logical {
+        lhs: Box<Expr>,
+        op: LogicalOp,
+        rhs: Box<Expr>,
+    },
+    Group(Box<Expr>),
+    Call {
+        func: Box<Expr>,
+        args: Vec<Expr>,
+    },
+    FieldGet {
+        object: Box<Expr>,
+        field: Ident,
+    },
+    FieldSet {
+        object: Box<Expr>,
+        field: Ident,
+        value: Box<Expr>,
+    },
+    Super {
+        super_: Ident,
+        method: Ident,
+    },
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -124,75 +191,4 @@ impl LogicalOp {
         };
         Some(op)
     }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct Ident {
-    pub name: String,
-    // Identifiers in different scopes may have the same name,
-    // but are not identical since they refer to different variables.
-    // The text range ensures that there is no collision between
-    // these identfiers during resolution.
-    pub range: TextRange,
-}
-
-#[derive(Clone, Debug, PartialEq)]
-pub enum Literal {
-    Number(f64),
-    Str(String),
-    Boolean(bool),
-    Null,
-}
-
-impl Display for Literal {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str(&match self {
-            Self::Number(n) => n.to_string(),
-            Self::Str(s) => s.to_owned(),
-            Self::Boolean(b) => b.to_string(),
-            Self::Null => "null".to_string(),
-        })
-    }
-}
-
-#[derive(Clone, Debug, PartialEq)]
-pub enum Expr {
-    Assignment {
-        name: Ident,
-        value: Box<Expr>,
-    },
-    Ident(Ident),
-    Literal(Literal),
-    Unary {
-        op: UnaryOp,
-        expr: Box<Expr>,
-    },
-    Binary {
-        lhs: Box<Expr>,
-        op: BinOp,
-        rhs: Box<Expr>,
-    },
-    Logical {
-        lhs: Box<Expr>,
-        op: LogicalOp,
-        rhs: Box<Expr>,
-    },
-    Group(Box<Expr>),
-    Call {
-        func: Box<Expr>,
-        args: Vec<Expr>,
-    },
-    FieldGet {
-        object: Box<Expr>,
-        field: Ident,
-    },
-    FieldSet {
-        object: Box<Expr>,
-        field: Ident,
-        value: Box<Expr>,
-    },
-    Super {
-        super_: Ident,
-        method: Ident,
-    },
 }
