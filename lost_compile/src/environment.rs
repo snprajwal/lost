@@ -1,39 +1,12 @@
-use std::{cell::RefCell, collections::HashMap, fmt::Display, rc::Rc};
+use std::{cell::RefCell, collections::HashMap, rc::Rc};
 
 use log::debug;
 
 use crate::{
     error::{runtime_error, ErrorMsg, Exception},
     stdlib,
-    types::{Class, Func, Instance, NativeFunc},
+    types::Value,
 };
-
-#[derive(Clone, Debug, PartialEq)]
-pub enum Value {
-    Boolean(bool),
-    Number(f64),
-    Str(String),
-    Func(Func),
-    NativeFunc(NativeFunc),
-    Class(Class),
-    Instance(Instance),
-    Null,
-}
-
-impl Display for Value {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str(&match self {
-            Self::Boolean(b) => b.to_string(),
-            Self::Number(n) => n.to_string(),
-            Self::Str(s) => s.clone(),
-            Self::Func(f) => f.to_string(),
-            Self::NativeFunc(f) => f.to_string(),
-            Self::Class(c) => c.to_string(),
-            Self::Instance(i) => i.to_string(),
-            Self::Null => "null".to_string(),
-        })
-    }
-}
 
 #[derive(Debug, Default, Clone, PartialEq)]
 pub struct Env {

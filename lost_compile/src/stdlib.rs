@@ -4,11 +4,8 @@ use std::{
 };
 
 use crate::{
-    environment::{
-        Env,
-        Value::{self, NativeFunc},
-    },
-    types,
+    environment::Env,
+    types::{NativeFunc, Value},
 };
 
 /// Initialises the environment with stdlib functions
@@ -17,7 +14,7 @@ pub fn init(env: &mut Env) {
     let fns: [(&str, Value); 2] = [
         (
             "print",
-            NativeFunc(types::NativeFunc {
+            Value::NativeFunc(NativeFunc {
                 name: "print".to_string(),
                 args: vec!["arg".to_string()],
                 body: |_, args| {
@@ -28,7 +25,7 @@ pub fn init(env: &mut Env) {
         ),
         (
             "clock",
-            NativeFunc(types::NativeFunc {
+            Value::NativeFunc(NativeFunc {
                 name: "clock".to_string(),
                 args: vec![],
                 body: |_, _| {

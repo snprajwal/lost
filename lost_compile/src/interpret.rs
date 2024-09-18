@@ -1,9 +1,9 @@
 use std::{cell::RefCell, cmp::Ordering, collections::HashMap, rc::Rc};
 
 use crate::{
-    environment::{Env, Value},
+    environment::Env,
     error::{runtime_error, ErrorMsg, Exception},
-    types::{Callable, Class, Func},
+    types::{to_bool, Callable, Class, Func, Value},
 };
 use lost_syntax::ast::{BinOp, Expr, Ident, Item, Literal, LogicalOp, Source, UnaryOp};
 
@@ -300,10 +300,10 @@ impl Interpreter {
 
         // Handle == and !=
         if op == &BinOp::EqualEqual {
-            return Ok(Value::Boolean(is_eq(&left, &right)));
+            return Ok(Value::Boolean(left == right));
         }
         if op == &BinOp::BangEqual {
-            return Ok(Value::Boolean(!(is_eq(&left, &right))));
+            return Ok(Value::Boolean(left != right));
         }
 
         // All other comparisons can be performed only on numbers.
@@ -433,22 +433,6 @@ impl Interpreter {
         method.env = Env::with_parent(method.env);
         method.env.borrow_mut().set("this", Value::Instance(this));
         Ok(Value::Func(method))
-    }
-}
-
-fn to_bool(v: &Value) -> bool {
-    match v {
-        Value::Null => false,
-        Value::Boolean(b) => *b,
-        _ => true,
-    }
-}
-
-fn is_eq(left: &Value, right: &Value) -> bool {
-    match (left, right) {
-        (Value::Number(m), Value::Number(n)) => m == n,
-        (Value::Str(m), Value::Str(n)) => m == n,
-        _ => to_bool(left) == to_bool(right),
     }
 }
 

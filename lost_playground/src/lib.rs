@@ -2,10 +2,7 @@ mod stdlib;
 
 use crate::stdlib::init;
 use lost_compile::{
-    environment::{Env, Value},
-    interpret::Interpreter,
-    resolve::Resolver,
-    run,
+    environment::Env, interpret::Interpreter, resolve::Resolver, run, types::Value,
 };
 use std::env;
 use wasm_bindgen::prelude::*;

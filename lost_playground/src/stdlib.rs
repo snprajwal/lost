@@ -1,9 +1,6 @@
 use lost_compile::{
-    environment::{
-        Env,
-        Value::{self, NativeFunc},
-    },
-    types,
+    environment::Env,
+    types::{NativeFunc, Value},
 };
 
 use crate::REPL_OUTPUT_VAR;
@@ -14,7 +11,7 @@ pub fn init(env: &mut Env) {
     // print(args)
     env.set(
         "print",
-        NativeFunc(types::NativeFunc {
+        Value::NativeFunc(NativeFunc {
             name: "print".to_string(),
             args: vec!["arg".to_string()],
             body: |interpreter, args| {

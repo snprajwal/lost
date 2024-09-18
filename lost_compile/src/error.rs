@@ -1,6 +1,6 @@
 use std::fmt::Display;
 
-use crate::environment::Value;
+use crate::types::Value;
 
 #[derive(Debug)]
 pub enum Exception {

@@ -8,10 +8,55 @@ use std::{
 use lost_syntax::ast::Item;
 
 use crate::{
-    environment::{Env, Value},
+    environment::Env,
     error::{runtime_error, ErrorMsg, Exception},
     interpret::Interpreter,
 };
+
+#[derive(Clone, Debug)]
+pub enum Value {
+    Boolean(bool),
+    Number(f64),
+    Str(String),
+    Func(Func),
+    NativeFunc(NativeFunc),
+    Class(Class),
+    Instance(Instance),
+    Null,
+}
+
+impl Display for Value {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&match self {
+            Self::Boolean(b) => b.to_string(),
+            Self::Number(n) => n.to_string(),
+            Self::Str(s) => s.clone(),
+            Self::Func(f) => f.to_string(),
+            Self::NativeFunc(f) => f.to_string(),
+            Self::Class(c) => c.to_string(),
+            Self::Instance(i) => i.to_string(),
+            Self::Null => "null".to_string(),
+        })
+    }
+}
+
+impl PartialEq for Value {
+    fn eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (Value::Number(m), Value::Number(n)) => m == n,
+            (Value::Str(m), Value::Str(n)) => m == n,
+            _ => to_bool(self) == to_bool(other),
+        }
+    }
+}
+
+pub fn to_bool(v: &Value) -> bool {
+    match v {
+        Value::Null => false,
+        Value::Boolean(b) => *b,
+        _ => true,
+    }
+}
 
 pub trait Callable {
     fn arity(&self) -> usize;
