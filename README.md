@@ -72,3 +72,7 @@ class Car <- Vehicle {
 let car = Car();
 car.countWheels(); // 4
 ```
+
+# License
+
+This project is licensed under the MIT License. Do whatever you want with it.
