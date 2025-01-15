@@ -10,9 +10,11 @@ For obvious reasons, I cannot name it Lust, hence Lox + Rust = Lost :)
 
 # Usage
 
-To run the Lost REPL, simply execute `cargo run`.
+To run the Lost REPL, simply execute `cargo run --bin lost`.
 
-To invoke the compiler on a `.lost` file, pass the file as an argument to the above command, i.e. `cargo run file.lost`.
+To invoke the interpreter on a `.lost` file, pass the file as an argument, i.e. `cargo run --bin lost file.lost`.
+
+The experimental bytecode VM can be used with `--bin lost_vm`. **It is not complete yet, use at your own risk!**
 
 # Getting started
 
@@ -75,4 +77,4 @@ car.countWheels(); // 4
 
 # License
 
-This project is licensed under the MIT License. Do whatever you want with it.
+This project is licensed under the [MIT License](/LICENSE). Do whatever you want with it.

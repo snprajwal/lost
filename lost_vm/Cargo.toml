@@ -1,0 +1,17 @@
+[package]
+name = "lost_vm"
+version = "0.1.0"
+authors = ["Prajwal S N <prajwalnadig21@gmail.com>"]
+edition = "2021"
+
+[lib]
+
+[[bin]]
+name = "lost_vm"
+path = "src/main.rs"
+
+[dependencies]
+"log" = "0.4.0"
+"pretty_env_logger" = "0.4.0"
+"lost_syntax" = { path = "../lost_syntax" }
+"num_enum" = "0.7.1"
